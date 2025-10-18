@@ -106,6 +106,7 @@ namespace LiveWall
                     //Debug.WriteLine("Checking for apps...");
                     bool is_fsc = is_full_screen(workerw);
 
+
                     if (is_fsc)
                     {
                         // if already paused
@@ -334,18 +335,6 @@ namespace LiveWall
                     }
                 }
             }
-            //possible redundancy
-            //else if (_rendermode == "multiple" &&  string.IsNullOrEmpty(_videofolder))
-            //{
-            //    //tries to read from settings
-            //    _videofolder = Properties.Settings.Default.video_folder;
-            //    if (string.IsNullOrEmpty(_videofolder))
-            //    {
-            //        //if nothing then ask for 1
-
-            //        generate_playlist();
-            //    }
-            //}
 
             //if after asking
             if (_rendermode == "single" && string.IsNullOrEmpty(_videolink))
@@ -398,12 +387,20 @@ namespace LiveWall
                 {
                     if (_videoplaybackcount > 0)
                     {
+                        //Debug.WriteLine("the video still needs to contiue");
+                        media = new Media(_libvlc, _videolist[_videolistorder], FromType.FromPath);
                         BeginInvoke(new Action(() => _player.Play(media)));
                         _videoplaybackcount--;
 
                     }
                     else
                     {
+                        //Debug.WriteLine("the video is finished, entirely.");
+                        _videolistorder ++;
+                        if (_videolistorder == _videolist.Count)
+                        {
+                            _videolistorder = 0;
+                        }
                         media = new Media(_libvlc, _videolist[_videolistorder], FromType.FromPath);
                         //calculate time
                         double duration = get_video_duration(_videolist[_videolistorder]);
@@ -413,7 +410,6 @@ namespace LiveWall
                         //Debug.WriteLine("length {0}", time);
                         _videoplaybackcount = get_repeat_count(time);
                         BeginInvoke(new Action(() => _player.Play(media)));
-                        _videolistorder = 0;
                     }
                 }
                 else
@@ -549,8 +545,30 @@ namespace LiveWall
 
         private void reload_wallpaper(object sender, EventArgs e)
         {
-            //literally redundance
-            start_playing();
+            if (_rendermode == "single")
+            {
+                if (string.IsNullOrEmpty(_videolink))
+                {
+                    get_videos();
+                }
+                Media media = new Media(_libvlc, _videolink, FromType.FromPath);
+                BeginInvoke(new Action(() => _player.Play(media)));
+            }
+            else
+            {
+                //re generate playlist
+                generate_playlist();
+                _videolistorder = 0;
+                Media media = new Media(_libvlc, _videolist[_videolistorder], FromType.FromPath);
+                //calculate time
+                double duration = get_video_duration(_videolist[_videolistorder]);
+                //Debug.WriteLine("duration {0}", duration);
+                //convert to seconds
+                int time = Convert.ToInt32(duration);
+                //Debug.WriteLine("length {0}", time);
+                _videoplaybackcount = get_repeat_count(time);
+                BeginInvoke(new Action(() => _player.Play(media)));
+            }
             return;
         }
 
@@ -567,8 +585,7 @@ namespace LiveWall
                 {
                     _videolink = openFileDialog.FileName;
                     save_configs();
-                    start_playing();
-
+                    reload_wallpaper(null, null);
                 }
                 else if (result == DialogResult.Cancel)
                 {
@@ -587,7 +604,7 @@ namespace LiveWall
                 {
                     _videofolder = folder_browser_dialog.SelectedPath;
                     save_configs();
-                    start_playing();
+                    reload_wallpaper(null, null);
                 }
                 else if (folder_browser_dialog.ShowDialog() == DialogResult.Cancel)
                 {
@@ -621,7 +638,7 @@ namespace LiveWall
                 _menuStrip.Items.RemoveAt(3);
                 _menuStrip.Items.RemoveAt(3);
             }
-            start_playing();
+            reload_wallpaper(null, null);
             return;
         }
 
@@ -638,15 +655,8 @@ namespace LiveWall
             {
                 _videolistorder = 0;
             }
-            Media media = new Media(_libvlc, _videolist[_videolistorder], FromType.FromPath);
-            //get the repeat count
-            double duration = get_video_duration(_videolist[_videolistorder]);
-            //Debug.WriteLine("duration {0}", duration);
-            //convert to seconds
-            int time = Convert.ToInt32(duration);
-            //Debug.WriteLine("length {0}", time);
-            _videoplaybackcount = get_repeat_count(time);
-            BeginInvoke(new Action(() => _player.Play(media)));
+            reload_wallpaper(null, null);
+            Debug.WriteLine("Skipping wallpaper");
         }
 
         private void change_loop_duration()
