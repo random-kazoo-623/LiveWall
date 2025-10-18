@@ -639,6 +639,13 @@ namespace LiveWall
                 _videolistorder = 0;
             }
             Media media = new Media(_libvlc, _videolist[_videolistorder], FromType.FromPath);
+            //get the repeat count
+            double duration = get_video_duration(_videolist[_videolistorder]);
+            //Debug.WriteLine("duration {0}", duration);
+            //convert to seconds
+            int time = Convert.ToInt32(duration);
+            //Debug.WriteLine("length {0}", time);
+            _videoplaybackcount = get_repeat_count(time);
             BeginInvoke(new Action(() => _player.Play(media)));
         }
 
@@ -757,72 +764,9 @@ namespace LiveWall
         private int get_repeat_count(int time)
         {
             int result = 0;
-            //Debug.WriteLine("Video length {0}", time);
-            //if (time <= 12)
-            //{
-            //    if (time <= 0)
-            //    {
-            //        //div by 0 oh NOOOO
-            //        return 10;
-            //    }
-            //    result = ((int)(180 / time));
-
-            //}
-            //else if (time == 13)
-            //{
-            //    result = 14;
-            //}
-            //else if (time <= 15)
-            //{
-            //    result = 12;
-            //}
-            //else if (time == 16)
-            //{
-            //    result = 11;
-            //}
-            //else if (time <= 18)
-            //{
-            //    result = 10;
-            //}
-            //else if (time <= 21)
-            //{
-            //    result = 9;
-            //}
-            //else if (time <= 24)
-            //{
-            //    result = 8;
-            //}
-            //else if (time <= 28)
-            //{
-            //    result = 7;
-            //}
-            //else if (time <= 33)
-            //{
-            //    result = 6;
-            //}
-            //else if (time <= 40)
-            //{
-            //    result = 5;
-            //}
-            //else if (time <= 50)
-            //{
-            //    result = 4;
-            //}
-            //else if (time <= 70)
-            //{
-            //    result = 3;
-            //}
-            //else if (time <= 180)
-            //{
-            //    result = 2;
-            //}
-            //else
-            //{
-            //    result = 1;
-            //}
-            //Debug.WriteLine("Repeat count {0}", result);
 
             result = (_videoloopmaxduration / time);
+            Debug.WriteLine("Repeat count {0}", result);
             //just in case
             result++;
             return result;
