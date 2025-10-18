@@ -2,6 +2,12 @@
 
 A system tray application that sets the user's live wallpapers
 
+## Dependencies (tbh idk if they count or not)##
+### LibVLCSharp ###
+### LibVLCSharp.WinForms ###
+### MediaToolkit ###
+### MediaToolkit.Standard.Core ###
+
 # 2 Modes #
 ## Single  Video Mode ##
 Set 1 live wallpaper chosen by the user and loop it forever
