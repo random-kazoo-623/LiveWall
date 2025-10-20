@@ -576,6 +576,7 @@ namespace LiveWall
             taskbar_menu.DropDownItems.Add("Make taskbar invisible", null, make_taskbar_translucent);
             taskbar_menu.DropDownItems.Add("Make taskbar opaque", null, make_taskbar_opaque);
             taskbar_menu.DropDownItems.Add("Make taskbar glass", null, make_taskbar_glass);
+            taskbar_menu.DropDownItems.Add("Make taskbar clear", null, make_taskbar_clear);
             taskbar_menu.DropDownItems.Add("Make taskbar default", null, make_taskbar_default);
             taskbar_menu.DropDownItems.Add("Turn normal on full screen", null, make_taskbar_default_on_fullscreen);
 
@@ -611,25 +612,72 @@ namespace LiveWall
                 return;
             }
             //apply the taskbar style
-
+            set_taskbar_style(AccentState.ACCENT_ENABLE_TRANSPARENTGRADIENT, Color.Transparent, 0); //this almost worked but it blurs the taskbar not making it visible throughly
+            Debug.WriteLine("Set taskbar to translucent");
             return;
         }
 
         private void make_taskbar_opaque(object sender, EventArgs e)
         {
             _taskbarstyle = "opaque";
+            IntPtr taskbar_handl = get_shell_traywnd();
+            if (taskbar_handl == IntPtr.Zero)
+            {
+                //if cannot find taskbar
+                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
+                return;
+            }
+            //apply the taskbar style
+            set_taskbar_style(AccentState.ACCENT_DISABLED, Color.Transparent, 0);
+            Debug.WriteLine("Set taskbar to opaque");
             return;
         }
 
         private void make_taskbar_glass(object sender, EventArgs e)
         {
             _taskbarstyle = "glass";
+            IntPtr taskbar_handl = get_shell_traywnd();
+            if (taskbar_handl == IntPtr.Zero )
+            {
+                //if cannot find taskbar
+                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
+                return;
+            }
+            //apply the taskbar style
+            set_taskbar_style(AccentState.ACCENT_ENABLE_BLURBEHIND);
+            Debug.WriteLine("Set taskbar to Blur");
+            return;
+        }
+
+        private void make_taskbar_clear(object sender, EventArgs e)
+        {
+            _taskbarstyle = "clear";
+            IntPtr taskbar_handl = get_shell_traywnd();
+            if (taskbar_handl == IntPtr.Zero)
+            {
+                //if cannot find taskbar
+                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
+                return;
+            }
+            //apply the taskbar style
+            set_taskbar_style(AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND, Color.Black, 0x10);
+            Debug.WriteLine("Set taskbar to clear");
             return;
         }
 
         private void make_taskbar_default(object sender, EventArgs e)
         {
             _taskbarstyle = "none";
+            IntPtr taskbar_handl = get_shell_traywnd();
+            if (taskbar_handl == IntPtr.Zero)
+            {
+                //if cannot find taskbar
+                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
+                return;
+            }
+            //apply the taskbar style
+            set_taskbar_style(AccentState.ACCENT_DISABLED);
+            Debug.WriteLine("Set taskbar to defaults");
             return;
         }
 
@@ -639,6 +687,7 @@ namespace LiveWall
             IntPtr taskbar_handl = FindWindow("Shell_TrayWnd", null);
             if (taskbar_handl != IntPtr.Zero)
             {
+                Debug.WriteLine("Found taskbar: {0}", taskbar_handl);
                 return taskbar_handl;
             }
             else
@@ -648,10 +697,36 @@ namespace LiveWall
             return IntPtr.Zero;
         }
 
-        private void set_taskbar_style()
+        private void set_taskbar_style(AccentState state, Color? tint = null, byte opacity = 0)
         {
             //set the taskbar appearance yes sir
+            IntPtr taskbar_handl = get_shell_traywnd();
+            if (taskbar_handl == IntPtr.Zero)
+            {
+                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
+                return;
+            }
+
+            AccentPolicy accent = new AccentPolicy();
+            accent.AccentState = state;
+
+            //color format = AARRGGBB
+            int color = (opacity << 24) | (tint?.ToArgb() ?? 0);
+
+            accent.GradientColor = color;
+
+            IntPtr accent_ptr = Marshal.AllocHGlobal(Marshal.SizeOf(accent));
+            Marshal.StructureToPtr(accent, accent_ptr, false);
+
+            WindowCompositionAttributeData data = new WindowCompositionAttributeData();
+            data.Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY;
+            data.SizeOfData = Marshal.SizeOf(accent);
+            data.Data = accent_ptr;
+
+            SetWindowCompositionAttribute(taskbar_handl, ref data);
+            Marshal.FreeHGlobal(accent_ptr);
         }
+
         private void make_taskbar_default_on_fullscreen(object sender, EventArgs e)
         {
             if (_taskbar_default_on_fullscreen == true)
@@ -999,6 +1074,10 @@ namespace LiveWall
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
         //taskbar ultils
+
+        [DllImport("user32.dll")]
+        private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
+
         private enum AccentState
         {
             ACCENT_DISABLED = 0,
