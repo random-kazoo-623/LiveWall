@@ -70,5 +70,29 @@ namespace LiveWall.Properties {
                 this["video_loop_max_duration"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("none")]
+        public string taskbar_style {
+            get {
+                return ((string)(this["taskbar_style"]));
+            }
+            set {
+                this["taskbar_style"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool taskbar_default_on_fullscreen {
+            get {
+                return ((bool)(this["taskbar_default_on_fullscreen"]));
+            }
+            set {
+                this["taskbar_default_on_fullscreen"] = value;
+            }
+        }
     }
 }

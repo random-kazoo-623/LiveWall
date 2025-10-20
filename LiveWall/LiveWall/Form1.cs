@@ -23,10 +23,13 @@ namespace LiveWall
 
         private ContextMenuStrip _menuStrip;
 
+        //load settings
         private string _videolink = Properties.Settings.Default.video_link;
         private string _videofolder = Properties.Settings.Default.video_folder;
         private string _rendermode = Properties.Settings.Default.render_mode;
         private int _videoloopmaxduration = Properties.Settings.Default.video_loop_max_duration;
+        private string _taskbarstyle = Properties.Settings.Default.taskbar_style;
+        private bool _taskbar_default_on_fullscreen = Properties.Settings.Default.taskbar_default_on_fullscreen;
 
 
         private List<string> _videolist = new List<string>();
@@ -573,6 +576,7 @@ namespace LiveWall
             taskbar_menu.DropDownItems.Add("Make taskbar invisible", null, make_taskbar_translucent);
             taskbar_menu.DropDownItems.Add("Make taskbar opaque", null, make_taskbar_opaque);
             taskbar_menu.DropDownItems.Add("Make taskbar glass", null, make_taskbar_glass);
+            taskbar_menu.DropDownItems.Add("Make taskbar default", null, make_taskbar_default);
             taskbar_menu.DropDownItems.Add("Turn normal on full screen", null, make_taskbar_default_on_fullscreen);
 
             //add the traymenu
@@ -597,21 +601,68 @@ namespace LiveWall
 
         private void make_taskbar_translucent(object sender, EventArgs e)
         {
+            //make taskbar translucent so yeah
+            _taskbarstyle = "translucent";
+            IntPtr taskbar_handl = get_shell_traywnd();
+            if (taskbar_handl == IntPtr.Zero )
+            {
+                //if cannot find taskbar
+                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
+                return;
+            }
+            //apply the taskbar style
+
             return;
         }
 
         private void make_taskbar_opaque(object sender, EventArgs e)
         {
+            _taskbarstyle = "opaque";
             return;
         }
 
         private void make_taskbar_glass(object sender, EventArgs e)
         {
+            _taskbarstyle = "glass";
             return;
         }
 
+        private void make_taskbar_default(object sender, EventArgs e)
+        {
+            _taskbarstyle = "none";
+            return;
+        }
+
+        private IntPtr get_shell_traywnd()
+        {
+            //find the taskbar handle
+            IntPtr taskbar_handl = FindWindow("Shell_TrayWnd", null);
+            if (taskbar_handl != IntPtr.Zero)
+            {
+                return taskbar_handl;
+            }
+            else
+            {
+                Debug.WriteLine("Error, cannot find the taskbar handle for some reason.");
+            }
+            return IntPtr.Zero;
+        }
+
+        private void set_taskbar_style()
+        {
+            //set the taskbar appearance yes sir
+        }
         private void make_taskbar_default_on_fullscreen(object sender, EventArgs e)
         {
+            if (_taskbar_default_on_fullscreen == true)
+            {
+                //disable it and display the current taskbar style instead
+                _taskbar_default_on_fullscreen = false;
+            }
+            else
+            {
+                _taskbar_default_on_fullscreen = true;
+            }
             return;
         }
 
@@ -861,6 +912,8 @@ namespace LiveWall
             Properties.Settings.Default.video_folder = _videofolder;
             Properties.Settings.Default.video_link = _videolink;
             Properties.Settings.Default.video_loop_max_duration = _videoloopmaxduration;
+            Properties.Settings.Default.taskbar_style = _taskbarstyle;
+            Properties.Settings.Default.taskbar_default_on_fullscreen = _taskbar_default_on_fullscreen;
             Properties.Settings.Default.Save();
             return;
         }
@@ -944,6 +997,40 @@ namespace LiveWall
 
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        //taskbar ultils
+        private enum AccentState
+        {
+            ACCENT_DISABLED = 0,
+            ACCENT_ENABLE_GRADIENT = 1,
+            ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
+            ACCENT_ENABLE_BLURBEHIND = 3,
+            ACCENT_ENABLE_ACRYLICBLURBEHIND = 4,
+            ACCENT_ENABLE_HOSTBACKDROP = 5,
+            ACCENT_INVALID_STATE = 6
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct AccentPolicy
+        {
+            public AccentState AccentState;
+            public int AccentFlags;
+            public int GradientColor;
+            public int AnimationId;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WindowCompositionAttributeData
+        {
+            public WindowCompositionAttribute Attribute;
+            public IntPtr Data;
+            public int SizeOfData;
+        }
+
+        private enum WindowCompositionAttribute
+        {
+            WCA_ACCENT_POLICY = 19
+        }
     }
 }
 
