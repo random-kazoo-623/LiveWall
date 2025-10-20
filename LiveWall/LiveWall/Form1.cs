@@ -1,8 +1,7 @@
 using LibVLCSharp.Shared;
 using LibVLCSharp.WinForms;
-using MediaToolkit;
-using MediaToolkit.Model;
 using System;
+using Shell32;
 using Microsoft.VisualBasic;
 using System.Diagnostics;
 using System.Drawing.Imaging;
@@ -12,6 +11,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
+using Xamarin.Forms.StyleSheets;
 namespace LiveWall
 {
     public partial class Form1 : Form
@@ -36,6 +36,14 @@ namespace LiveWall
         public Form1()
         {
             InitializeComponent();
+
+            /*
+             Planned work
+            fully implement the workerw get
+            implement a clear taskbar look
+            add support for gif video files and scene based live wallpapers
+
+             */
 
             _videoview = new VideoView
             {
@@ -342,6 +350,14 @@ namespace LiveWall
                 return false;
             }
 
+            //if render mode is multiple and nothing gets fetched
+            if (_rendermode == "multiple" && string.IsNullOrEmpty(_videofolder) &&  _videolist.Count == 0)
+            {
+                //tries to read from setting
+                _videofolder = Properties.Settings.Default.video_folder;
+                generate_playlist();
+            }
+
             Media media;
             //use vlc to play a video repetively
             if (_rendermode == "single")
@@ -510,12 +526,22 @@ namespace LiveWall
 
         private double get_video_duration(string video_path)
         {
-            double duration = 0;
-            var video = new MediaFile { Filename = video_path };
-            var engine = new Engine();
-            engine.GetMetadata(video);
-            duration = video.Metadata.Duration.TotalSeconds;
-            return duration;
+            //new method since old one got bugged out smh
+            var shell = new Shell();
+            var folder = shell.NameSpace(System.IO.Path.GetDirectoryName(video_path));
+            var item = folder.ParseName(System.IO.Path.GetFileName(video_path));
+
+            string duration_str = folder.GetDetailsOf(item, 27);
+
+            if (TimeSpan.TryParse(duration_str, out var duration))
+            {
+                return duration.TotalSeconds;
+            }
+
+            if (TimeSpan.TryParseExact(duration_str, @"h\:mm\:ss", null, out duration))
+                return duration.TotalSeconds;
+
+            return 0;
         }
 
         private bool init_system_tray_icon()
