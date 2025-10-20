@@ -42,7 +42,10 @@ namespace LiveWall
             fully implement the workerw get
             implement a clear taskbar look
             add support for gif video files and scene based live wallpapers
-
+            add support for pictures based wallpapers
+            add option to animate static wallpapers with visualizer, bobby and particle animations
+            implement a transition animation between wallpapers
+            add a dynamic resolution adjustion for when the user changes their monitor resolution.
              */
 
             _videoview = new VideoView
@@ -139,13 +142,13 @@ namespace LiveWall
             else
             {
                 Debug.WriteLine("WorkerW not found.");
-
+                Application.Exit();
             }
         }
 
         private IntPtr get_workerw()
         {
-            IntPtr progman = FindWindow("Progman", null);
+            IntPtr progman = FindWindow("Progman", "");
 
             IntPtr result = SendMessageTimeout(progman,
                                 0x052c,
@@ -159,7 +162,6 @@ namespace LiveWall
             {
                 Debug.WriteLine("spawned sheldll.");
             }
-            else return IntPtr.Zero;
             // find shell_defview and workerW
             IntPtr workerw = IntPtr.Zero;
             IntPtr shell_def = IntPtr.Zero;
@@ -270,7 +272,7 @@ namespace LiveWall
                     {
                         //ask the user for the video path and then writes it to text_path
                         OpenFileDialog openFileDialog = new OpenFileDialog();
-                        openFileDialog.Filter = "Video files (*.mp4)|*.mp4";
+                        openFileDialog.Filter = "Video files (*.mp4)|*.mp4 | GIF files (*.gif)|*.gif| MOV files (*.mov)|*.mov| MKV files (*.mkv)|*.mkv| AVI files (*.avi)|*.avi";
                         openFileDialog.CheckFileExists = true;
                         openFileDialog.Title = "Choose a live wallpaper";
 
@@ -320,7 +322,7 @@ namespace LiveWall
                     //if not then ask the user for 1
                     MessageBox.Show("Error, video file/wallpaper not found, is the file deleted?");
                     OpenFileDialog openFileDialog = new OpenFileDialog();
-                    openFileDialog.Filter = "Video files (*.mp4)|*.mp4";
+                    openFileDialog.Filter = "Video files (*.mp4)|*.mp4 | GIF files (*.gif)|*.gif| MOV files (*.mov)|*.mov| MKV files (*.mkv)|*.mkv| AVI files (*.avi)|*.avi";
                     openFileDialog.CheckFileExists = true;
                     openFileDialog.Title = "Choose a live wallpaper";
 
@@ -356,6 +358,12 @@ namespace LiveWall
                 //tries to read from setting
                 _videofolder = Properties.Settings.Default.video_folder;
                 generate_playlist();
+            }
+
+            //if after asking
+            if (_rendermode == "multiple" && string.IsNullOrEmpty(_videofolder) && _videolist.Count == 0)
+            {
+                return false;
             }
 
             Media media;
@@ -397,6 +405,8 @@ namespace LiveWall
                 //checks render mode
                 if (_rendermode == "single")
                 {
+                    //creates a new media just in case
+                    media = new Media(_libvlc, _videolink, FromType.FromPath);
                     BeginInvoke(new Action(() => _player.Play(media)));
                 }
                 else if (_rendermode == "multiple")
@@ -480,6 +490,10 @@ namespace LiveWall
                         video_files.Add(file);
                         break;
                     case ".mov":
+                        //Debug.WriteLine("Added {0}", file);
+                        video_files.Add(file);
+                        break;
+                    case "gif":
                         //Debug.WriteLine("Added {0}", file);
                         video_files.Add(file);
                         break;
@@ -578,6 +592,7 @@ namespace LiveWall
                     get_videos();
                 }
                 Media media = new Media(_libvlc, _videolink, FromType.FromPath);
+                Debug.WriteLine("playing video {0}", _videolink);
                 BeginInvoke(new Action(() => _player.Play(media)));
             }
             else
@@ -603,7 +618,7 @@ namespace LiveWall
             if (_rendermode == "single")
             {
                 OpenFileDialog openFileDialog = new OpenFileDialog();
-                openFileDialog.Filter = "Video files (*.mp4)|*.mp4";
+                //openFileDialog.Filter = "Video files (*.mp4)|*.mp4 | GIF files (*.gif)|*.gif| MOV files (*.mov)|*.mov| MKV files (*.mkv)|*.mkv| AVI files (*.avi)|*.avi";
                 openFileDialog.CheckFileExists = true;
                 openFileDialog.Title = "Choose a live wallpaper";
                 DialogResult result = openFileDialog.ShowDialog();
