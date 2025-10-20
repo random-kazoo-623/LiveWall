@@ -40,7 +40,7 @@ namespace LiveWall
             /*
              Planned work
             fully implement the workerw get
-            implement a clear taskbar look
+            implement a clear taskbar look like translucentTB
             add support for gif video files and scene based live wallpapers
             add support for pictures based wallpapers
             add option to animate static wallpapers with visualizer, bobby and particle animations
@@ -567,6 +567,18 @@ namespace LiveWall
             _menuStrip.Items.Add("Change render mode", null, change_render_mode);
             _menuStrip.Items.Add(new ToolStripSeparator());
             _menuStrip.Items.Add("Open Wallpaper Folder", null, open_wallpaper_location);
+
+            //create taskbar traymenu dropdown box
+            var taskbar_menu = new ToolStripMenuItem("Taskbar Options");
+            taskbar_menu.DropDownItems.Add("Make taskbar invisible", null, make_taskbar_translucent);
+            taskbar_menu.DropDownItems.Add("Make taskbar opaque", null, make_taskbar_opaque);
+            taskbar_menu.DropDownItems.Add("Make taskbar glass", null, make_taskbar_glass);
+            taskbar_menu.DropDownItems.Add("Turn normal on full screen", null, make_taskbar_default_on_fullscreen);
+
+            //add the traymenu
+            _menuStrip.Items.Add(new ToolStripSeparator());
+            _menuStrip.Items.Add(taskbar_menu);
+
             _menuStrip.Items.Add(new ToolStripSeparator());
             _menuStrip.Items.Add("Exit", null, exit_wallpaper);
 
@@ -581,6 +593,26 @@ namespace LiveWall
 
 
             return true;
+        }
+
+        private void make_taskbar_translucent(object sender, EventArgs e)
+        {
+            return;
+        }
+
+        private void make_taskbar_opaque(object sender, EventArgs e)
+        {
+            return;
+        }
+
+        private void make_taskbar_glass(object sender, EventArgs e)
+        {
+            return;
+        }
+
+        private void make_taskbar_default_on_fullscreen(object sender, EventArgs e)
+        {
+            return;
         }
 
         private void reload_wallpaper(object sender, EventArgs e)
