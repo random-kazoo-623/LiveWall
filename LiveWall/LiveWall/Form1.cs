@@ -1,8 +1,7 @@
 using LibVLCSharp.Shared;
 using LibVLCSharp.WinForms;
-using System;
-using Shell32;
 using Microsoft.VisualBasic;
+using System;
 using System.Diagnostics;
 using System.Drawing.Imaging;
 using System.Linq.Expressions;
@@ -12,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
 using Xamarin.Forms.StyleSheets;
+
 namespace LiveWall
 {
     public partial class Form1 : Form
@@ -35,6 +35,12 @@ namespace LiveWall
         private List<string> _videolist = new List<string>();
         private int _videolistorder = 0;
         private int _videoplaybackcount = 0;
+
+        //load dwm set window attributes
+        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+        private const int DWMWA_SYSTEMBACKDROP_TYPE = 38; //win 11
+        private const int DWMWA_MICA_EFFECT = 1029;       //fallback
+
 
         public Form1()
         {
@@ -261,7 +267,7 @@ namespace LiveWall
             switch (_rendermode)
             {
                 case "single":
-                    if (!File.Exists(_videolink) && _videolink != "")
+                    if (!File.Exists(_videolink) || string.IsNullOrEmpty(_videolink))
                     {
                         //if file does not exist
                         MessageBox.Show("Error, video file/wallpaper not found, is the file deleted?");
@@ -275,7 +281,7 @@ namespace LiveWall
                     {
                         //ask the user for the video path and then writes it to text_path
                         OpenFileDialog openFileDialog = new OpenFileDialog();
-                        openFileDialog.Filter = "Video files (*.mp4)|*.mp4 | GIF files (*.gif)|*.gif| MOV files (*.mov)|*.mov| MKV files (*.mkv)|*.mkv| AVI files (*.avi)|*.avi";
+                        openFileDialog.Filter = "Video files (*.mp4)|*.mp4| GIF files (*.gif)|*.gif| MOV files (*.mov)|*.mov| MKV files (*.mkv)|*.mkv| AVI files (*.avi)|*.avi";
                         openFileDialog.CheckFileExists = true;
                         openFileDialog.Title = "Choose a live wallpaper";
 
@@ -325,7 +331,7 @@ namespace LiveWall
                     //if not then ask the user for 1
                     MessageBox.Show("Error, video file/wallpaper not found, is the file deleted?");
                     OpenFileDialog openFileDialog = new OpenFileDialog();
-                    openFileDialog.Filter = "Video files (*.mp4)|*.mp4 | GIF files (*.gif)|*.gif| MOV files (*.mov)|*.mov| MKV files (*.mkv)|*.mkv| AVI files (*.avi)|*.avi";
+                    openFileDialog.Filter = "Video files (*.mp4)|*.mp4| GIF files (*.gif)|*.gif| MOV files (*.mov)|*.mov| MKV files (*.mkv)|*.mkv| AVI files (*.avi)|*.avi";
                     openFileDialog.CheckFileExists = true;
                     openFileDialog.Title = "Choose a live wallpaper";
 
@@ -356,7 +362,7 @@ namespace LiveWall
             }
 
             //if render mode is multiple and nothing gets fetched
-            if (_rendermode == "multiple" && string.IsNullOrEmpty(_videofolder) &&  _videolist.Count == 0)
+            if (_rendermode == "multiple" && string.IsNullOrEmpty(_videofolder) && _videolist.Count == 0)
             {
                 //tries to read from setting
                 _videofolder = Properties.Settings.Default.video_folder;
@@ -425,7 +431,7 @@ namespace LiveWall
                     else
                     {
                         //Debug.WriteLine("the video is finished, entirely.");
-                        _videolistorder ++;
+                        _videolistorder++;
                         if (_videolistorder == _videolist.Count)
                         {
                             _videolistorder = 0;
@@ -543,22 +549,56 @@ namespace LiveWall
 
         private double get_video_duration(string video_path)
         {
-            //new method since old one got bugged out smh
-            var shell = new Shell();
-            var folder = shell.NameSpace(System.IO.Path.GetDirectoryName(video_path));
-            var item = folder.ParseName(System.IO.Path.GetFileName(video_path));
+            //new new method since old one got bugged out smh
+            //ffprobe.exe in the same directory or in PATH
 
-            string duration_str = folder.GetDetailsOf(item, 27);
-
-            if (TimeSpan.TryParse(duration_str, out var duration))
+            //checks if ffprobe is installed:
+            string ffprobe_abs_path = "C:\ffmpeg\bin\ffprobe.exe";
+            if (!File.Exists(ffprobe_abs_path))
             {
-                return duration.TotalSeconds;
+                //checks if ffprobe is already saved
+                string exe_path = Environment.CurrentDirectory.ToString() + "ffprobe.exe";
+                if (!File.Exists(exe_path))
+                {
+                    Debug.WriteLine("ffprobe is not installed on this machine, new exe path: {0}", exe_path);
+                    //if not installed use the resource version
+                    byte[] exe_bytes = Properties.Resources.ffprobe;
+                    //writes the file to path
+                    using (FileStream fsDst = new FileStream(exe_path, FileMode.CreateNew, FileAccess.Write))
+                    {
+                        fsDst.Write(exe_bytes, 0, exe_bytes.Length);
+                        fsDst.Close();
+                        fsDst.Dispose();
+                    }
+                }
+                ffprobe_abs_path = exe_path;
+            }
+            else Debug.WriteLine("ffprobe is acutally installed!");
+
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = ffprobe_abs_path,
+                Arguments = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{video_path}\"",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using (var process = Process.Start(psi))
+            {
+                string result = process.StandardOutput.ReadToEnd();
+                process.WaitForExit();
+
+                if (double.TryParse(result, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out double seconds))
+                {
+                    return seconds;
+                }
             }
 
-            if (TimeSpan.TryParseExact(duration_str, @"h\:mm\:ss", null, out duration))
-                return duration.TotalSeconds;
-
             return 0;
+
         }
 
         private bool init_system_tray_icon()
@@ -576,7 +616,6 @@ namespace LiveWall
             taskbar_menu.DropDownItems.Add("Make taskbar invisible", null, make_taskbar_translucent);
             taskbar_menu.DropDownItems.Add("Make taskbar opaque", null, make_taskbar_opaque);
             taskbar_menu.DropDownItems.Add("Make taskbar glass", null, make_taskbar_glass);
-            taskbar_menu.DropDownItems.Add("Make taskbar clear", null, make_taskbar_clear);
             taskbar_menu.DropDownItems.Add("Make taskbar default", null, make_taskbar_default);
             taskbar_menu.DropDownItems.Add("Turn normal on full screen", null, make_taskbar_default_on_fullscreen);
 
@@ -604,127 +643,142 @@ namespace LiveWall
         {
             //make taskbar translucent so yeah
             _taskbarstyle = "translucent";
-            IntPtr taskbar_handl = get_shell_traywnd();
-            if (taskbar_handl == IntPtr.Zero )
-            {
-                //if cannot find taskbar
-                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
-                return;
-            }
-            //apply the taskbar style
-            set_taskbar_style(AccentState.ACCENT_ENABLE_TRANSPARENTGRADIENT, Color.Transparent, 0); //this almost worked but it blurs the taskbar not making it visible throughly
-            Debug.WriteLine("Set taskbar to translucent");
+            //apply style
+            set_taskbar_style();
             return;
         }
 
         private void make_taskbar_opaque(object sender, EventArgs e)
         {
             _taskbarstyle = "opaque";
-            IntPtr taskbar_handl = get_shell_traywnd();
-            if (taskbar_handl == IntPtr.Zero)
-            {
-                //if cannot find taskbar
-                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
-                return;
-            }
-            //apply the taskbar style
-            set_taskbar_style(AccentState.ACCENT_DISABLED, Color.Transparent, 0);
-            Debug.WriteLine("Set taskbar to opaque");
+            //apply style
+            set_taskbar_style();
             return;
         }
 
         private void make_taskbar_glass(object sender, EventArgs e)
         {
             _taskbarstyle = "glass";
-            IntPtr taskbar_handl = get_shell_traywnd();
-            if (taskbar_handl == IntPtr.Zero )
-            {
-                //if cannot find taskbar
-                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
-                return;
-            }
-            //apply the taskbar style
-            set_taskbar_style(AccentState.ACCENT_ENABLE_BLURBEHIND);
-            Debug.WriteLine("Set taskbar to Blur");
-            return;
-        }
-
-        private void make_taskbar_clear(object sender, EventArgs e)
-        {
-            _taskbarstyle = "clear";
-            IntPtr taskbar_handl = get_shell_traywnd();
-            if (taskbar_handl == IntPtr.Zero)
-            {
-                //if cannot find taskbar
-                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
-                return;
-            }
-            //apply the taskbar style
-            set_taskbar_style(AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND, Color.Black, 0x10);
-            Debug.WriteLine("Set taskbar to clear");
+            //apply_style
+            set_taskbar_style();
             return;
         }
 
         private void make_taskbar_default(object sender, EventArgs e)
         {
             _taskbarstyle = "none";
-            IntPtr taskbar_handl = get_shell_traywnd();
-            if (taskbar_handl == IntPtr.Zero)
-            {
-                //if cannot find taskbar
-                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
-                return;
-            }
-            //apply the taskbar style
-            set_taskbar_style(AccentState.ACCENT_DISABLED);
-            Debug.WriteLine("Set taskbar to defaults");
+            //apply style
+            set_taskbar_style();
             return;
         }
 
-        private IntPtr get_shell_traywnd()
+        //credits to lively for c# implementation of TranslucentTB, you are the goat!
+        private List<IntPtr> get_taskbar_handles()
         {
-            //find the taskbar handle
+            var taskbar_handles = new List<IntPtr>(2);
+            //find the first taskbar handle
             IntPtr taskbar_handl = FindWindow("Shell_TrayWnd", null);
             if (taskbar_handl != IntPtr.Zero)
             {
-                Debug.WriteLine("Found taskbar: {0}", taskbar_handl);
-                return taskbar_handl;
+                Debug.WriteLine("Found Main taskbar: {0}", taskbar_handl);
+                taskbar_handles.Add(taskbar_handl);
             }
             else
             {
-                Debug.WriteLine("Error, cannot find the taskbar handle for some reason.");
+                Debug.WriteLine("Error, cannot find the main taskbar handle for some reason.");
             }
-            return IntPtr.Zero;
+
+            //secondary handle(s)
+            taskbar_handl = FindWindow("Shell_SecondaryTrayWnd", null);
+            if (taskbar_handl != IntPtr.Zero)
+            {
+                Debug.WriteLine("Found Secondary taskbar: {0}", taskbar_handl);
+                taskbar_handles.Add(taskbar_handl);
+                Debug.WriteLine("Finding more taskbars...");
+                while (taskbar_handl != IntPtr.Zero)
+                {
+                    taskbar_handl = FindWindowEx(IntPtr.Zero, taskbar_handl, "Shell_SecondaryTrayWnd", IntPtr.Zero);
+                    if (taskbar_handl != IntPtr.Zero)
+                    {
+                        taskbar_handles.Add(taskbar_handl);
+                    }
+                }
+            }
+            else
+            {
+                Debug.WriteLine("Error, cannot find the 2nd taskbar handles for some reason.");
+            }
+
+            return taskbar_handles;
         }
 
-        private void set_taskbar_style(AccentState state, Color? tint = null, byte opacity = 0)
+        private void set_taskbar_style()
         {
             //set the taskbar appearance yes sir
-            IntPtr taskbar_handl = get_shell_traywnd();
-            if (taskbar_handl == IntPtr.Zero)
+            List<IntPtr> taskbar_handls = get_taskbar_handles();
+            if (taskbar_handls.Count == 0)
             {
-                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
+                MessageBox.Show("Error, program cannot find the taskbar anywhere. Returning...");
                 return;
             }
 
-            AccentPolicy accent = new AccentPolicy();
-            accent.AccentState = state;
+            //accents
+            AccentPolicy accent_policy = new AccentPolicy();
 
-            //color format = AARRGGBB
-            int color = (opacity << 24) | (tint?.ToArgb() ?? 0);
+            save_configs();
+            
 
-            accent.GradientColor = color;
+            switch (_taskbarstyle)
+            {
+                case "none":
+                    //reset the taskbar style
+                    foreach (var taskbar in taskbar_handls)
+                    {
+                        SendMessage(taskbar, (int)TaskbarFlags.DWMCOMPOSITIONCHANGED, IntPtr.Zero, IntPtr.Zero);
+                    }
+                    Debug.WriteLine("Set taskbar to none.");
+                    return;
+                case "translucent":
+                    //set the taskbar translucent
+                    var accent_ptr = IntPtr.Zero;
+                    try
+                    {
+                        //manually set the accent policy
+                        accent_policy.GradientColor = 16777215;
+                        accent_policy.AccentState = AccentState.ACCENT_ENABLE_TRANSPARENTGRADIENT;
 
-            IntPtr accent_ptr = Marshal.AllocHGlobal(Marshal.SizeOf(accent));
-            Marshal.StructureToPtr(accent, accent_ptr, false);
+                        var accent_struct_size = Marshal.SizeOf(accent_policy);
+                        accent_ptr = Marshal.AllocHGlobal(accent_struct_size);
+                        Marshal.StructureToPtr(accent_policy, accent_ptr, false);
 
-            WindowCompositionAttributeData data = new WindowCompositionAttributeData();
-            data.Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY;
-            data.SizeOfData = Marshal.SizeOf(accent);
-            data.Data = accent_ptr;
+                        var data = new WindowCompositionAttributeData
+                        {
+                            Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
+                            SizeOfData = accent_struct_size,
+                            Data = accent_ptr
+                        };
 
-            SetWindowCompositionAttribute(taskbar_handl, ref data);
-            Marshal.FreeHGlobal(accent_ptr);
+                        //now set all
+                        foreach (var taskbar in taskbar_handls)
+                        {
+                            SetWindowCompositionAttribute(taskbar, ref data);
+                        }
+
+                    }
+                    catch (Exception e)
+                    {
+                        MessageBox.Show("Error: Error occured while setting taskbar style: {0}", e.ToString());
+                    }
+                    finally
+                    {
+                        //dipose 
+                        Debug.WriteLine("Set taskbar to translucent.");
+                        Marshal.FreeHGlobal(accent_ptr);
+                    }
+                    return;
+                default:
+                    return;
+            }
         }
 
         private void make_taskbar_default_on_fullscreen(object sender, EventArgs e)
@@ -745,11 +799,22 @@ namespace LiveWall
         {
             if (_rendermode == "single")
             {
-                if (string.IsNullOrEmpty(_videolink))
+                Media media;
+                if (string.IsNullOrEmpty(_videolink) || !File.Exists(_videolink))
                 {
                     get_videos();
                 }
-                Media media = new Media(_libvlc, _videolink, FromType.FromPath);
+                try
+                {
+                    media = new Media(_libvlc, _videolink, FromType.FromPath);
+                }
+                catch (Exception ex)
+                {
+                    //if for some reason _videolink IS STILL EMPTY
+                    _videolink = Properties.Settings.Default.video_link;
+                    media = new Media(_libvlc, _videolink, FromType.FromPath);
+                }
+
                 Debug.WriteLine("playing video {0}", _videolink);
                 BeginInvoke(new Action(() => _player.Play(media)));
             }
@@ -776,7 +841,7 @@ namespace LiveWall
             if (_rendermode == "single")
             {
                 OpenFileDialog openFileDialog = new OpenFileDialog();
-                //openFileDialog.Filter = "Video files (*.mp4)|*.mp4 | GIF files (*.gif)|*.gif| MOV files (*.mov)|*.mov| MKV files (*.mkv)|*.mkv| AVI files (*.avi)|*.avi";
+                //openFileDialog.Filter = "Video files (*.mp4)|*.mp4| GIF files (*.gif)|*.gif| MOV files (*.mov)|*.mov| MKV files (*.mkv)|*.mkv| AVI files (*.avi)|*.avi";
                 openFileDialog.CheckFileExists = true;
                 openFileDialog.Title = "Choose a live wallpaper";
                 DialogResult result = openFileDialog.ShowDialog();
@@ -1076,39 +1141,50 @@ namespace LiveWall
         //taskbar ultils
 
         [DllImport("user32.dll")]
-        private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
 
-        private enum AccentState
+        private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        private enum TaskbarFlags : uint
         {
-            ACCENT_DISABLED = 0,
-            ACCENT_ENABLE_GRADIENT = 1,
-            ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
-            ACCENT_ENABLE_BLURBEHIND = 3,
-            ACCENT_ENABLE_ACRYLICBLURBEHIND = 4,
-            ACCENT_ENABLE_HOSTBACKDROP = 5,
-            ACCENT_INVALID_STATE = 6
+            DWMCOMPOSITIONCHANGED = 0x031E,
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        private struct AccentPolicy
-        {
-            public AccentState AccentState;
-            public int AccentFlags;
-            public int GradientColor;
-            public int AnimationId;
-        }
+        [DllImport("user32.dll")]
+        internal static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
 
         [StructLayout(LayoutKind.Sequential)]
-        private struct WindowCompositionAttributeData
+        internal struct WindowCompositionAttributeData
         {
             public WindowCompositionAttribute Attribute;
             public IntPtr Data;
             public int SizeOfData;
         }
 
-        private enum WindowCompositionAttribute
+
+        //pasted from lively... also apparently it is also undocumented O_O
+        internal enum WindowCompositionAttribute
         {
+            // ...
             WCA_ACCENT_POLICY = 19
+            // ...
+        }
+
+        internal enum AccentState
+        {
+            ACCENT_DISABLED = 0,
+            ACCENT_ENABLE_GRADIENT = 1,
+            ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
+            ACCENT_ENABLE_BLURBEHIND = 3,
+            ACCENT_ENABLE_FLUENT = 4 //don't like alpha = 0
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct AccentPolicy
+        {
+            public AccentState AccentState;
+            public int AccentFlags;
+            public uint GradientColor; //AABBGGRR
+            public int AnimationId;
         }
     }
 }
