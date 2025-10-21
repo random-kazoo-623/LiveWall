@@ -47,10 +47,8 @@ namespace LiveWall
             /*
              Planned work
             fully implement the workerw get
-            implement a clear taskbar look like translucentTB
             add support for gif video files and scene based live wallpapers
             add support for pictures based wallpapers
-            add option to animate static wallpapers with visualizer, bobby and particle animations
             implement a transition animation between wallpapers
             add a dynamic resolution adjustion for when the user changes their monitor resolution.
             multi monitor setup???
@@ -117,10 +115,6 @@ namespace LiveWall
                     MessageBox.Show("Error, cannot play wallpaper due to user not obeying orders, terminating...");
                     return;
                 }
-
-                //start translucentTB
-                //translucent_TB_service();
-                //start_TB_service();
 
                 //timer loop to check whenether a full screen application is in effect
                 var timer = new System.Windows.Forms.Timer { Interval = 300 };
@@ -727,6 +721,7 @@ namespace LiveWall
 
         private void make_taskbar_default_on_fullscreen(object sender, EventArgs e)
         {
+            //NOT IMPLEMENTED
             if (_taskbar_default_on_fullscreen == true)
             {
                 //disable it and display the current taskbar style instead
