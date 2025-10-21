@@ -8,6 +8,8 @@ A system tray application that sets the user's live wallpapers
 
 ### LibVLCSharp.WinForms
 
+### TagLibSharp
+
 ### 2 Modes
 
 ## Single  Video Mode
