@@ -1,6 +1,7 @@
 using LibVLCSharp.Shared;
 using LibVLCSharp.WinForms;
 using Microsoft.VisualBasic;
+using Microsoft.Win32;
 using System;
 using System.Diagnostics;
 using System.Drawing.Imaging;
@@ -10,8 +11,11 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
+using TagLib;
 using Xamarin.Forms.StyleSheets;
-
+using static System.Windows.Forms.AxHost;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
+using File = System.IO.File;
 namespace LiveWall
 {
     public partial class Form1 : Form
@@ -36,12 +40,6 @@ namespace LiveWall
         private int _videolistorder = 0;
         private int _videoplaybackcount = 0;
 
-        //load dwm set window attributes
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        private const int DWMWA_SYSTEMBACKDROP_TYPE = 38; //win 11
-        private const int DWMWA_MICA_EFFECT = 1029;       //fallback
-
-
         public Form1()
         {
             InitializeComponent();
@@ -55,6 +53,7 @@ namespace LiveWall
             add option to animate static wallpapers with visualizer, bobby and particle animations
             implement a transition animation between wallpapers
             add a dynamic resolution adjustion for when the user changes their monitor resolution.
+            multi monitor setup???
              */
 
             _videoview = new VideoView
@@ -119,13 +118,16 @@ namespace LiveWall
                     return;
                 }
 
+                //start translucentTB
+                //translucent_TB_service();
+                //start_TB_service();
+
                 //timer loop to check whenether a full screen application is in effect
                 var timer = new System.Windows.Forms.Timer { Interval = 300 };
                 timer.Tick += (sender, e) =>
                 {
                     //Debug.WriteLine("Checking for apps...");
                     bool is_fsc = is_full_screen(workerw);
-
 
                     if (is_fsc)
                     {
@@ -550,55 +552,40 @@ namespace LiveWall
         private double get_video_duration(string video_path)
         {
             //new new method since old one got bugged out smh
-            //ffprobe.exe in the same directory or in PATH
 
             //checks if ffprobe is installed:
-            string ffprobe_abs_path = "C:\ffmpeg\bin\ffprobe.exe";
-            if (!File.Exists(ffprobe_abs_path))
+            string ffprobe_abs_path = $"C:\ffmpeg\bin\ffprobe.exe";
+            if (File.Exists(ffprobe_abs_path))
             {
-                //checks if ffprobe is already saved
-                string exe_path = Environment.CurrentDirectory.ToString() + "ffprobe.exe";
-                if (!File.Exists(exe_path))
+                //if ffprobe is installed
+                var psi = new ProcessStartInfo
                 {
-                    Debug.WriteLine("ffprobe is not installed on this machine, new exe path: {0}", exe_path);
-                    //if not installed use the resource version
-                    byte[] exe_bytes = Properties.Resources.ffprobe;
-                    //writes the file to path
-                    using (FileStream fsDst = new FileStream(exe_path, FileMode.CreateNew, FileAccess.Write))
+                    FileName = ffprobe_abs_path,
+                    Arguments = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{video_path}\"",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using (var process = Process.Start(psi))
+                {
+                    string result = process.StandardOutput.ReadToEnd();
+                    process.WaitForExit();
+
+                    if (double.TryParse(result, System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture, out double seconds))
                     {
-                        fsDst.Write(exe_bytes, 0, exe_bytes.Length);
-                        fsDst.Close();
-                        fsDst.Dispose();
+                        return seconds;
                     }
                 }
-                ffprobe_abs_path = exe_path;
             }
-            else Debug.WriteLine("ffprobe is acutally installed!");
+            else Debug.WriteLine("ffprobe is not installed");
 
-
-            var psi = new ProcessStartInfo
+            //if ffprobe is not installed, use taglib
+            using (var file = TagLib.File.Create(video_path))
             {
-                FileName = ffprobe_abs_path,
-                Arguments = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{video_path}\"",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using (var process = Process.Start(psi))
-            {
-                string result = process.StandardOutput.ReadToEnd();
-                process.WaitForExit();
-
-                if (double.TryParse(result, System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out double seconds))
-                {
-                    return seconds;
-                }
+                return file.Properties.Duration.TotalSeconds;
             }
-
-            return 0;
-
         }
 
         private bool init_system_tray_icon()
@@ -613,10 +600,9 @@ namespace LiveWall
 
             //create taskbar traymenu dropdown box
             var taskbar_menu = new ToolStripMenuItem("Taskbar Options");
-            taskbar_menu.DropDownItems.Add("Make taskbar invisible", null, make_taskbar_translucent);
+            taskbar_menu.DropDownItems.Add("Make taskbar invisible (fully)", null, make_taskbar_invisible);
             taskbar_menu.DropDownItems.Add("Make taskbar opaque", null, make_taskbar_opaque);
-            taskbar_menu.DropDownItems.Add("Make taskbar glass", null, make_taskbar_glass);
-            taskbar_menu.DropDownItems.Add("Make taskbar default", null, make_taskbar_default);
+            taskbar_menu.DropDownItems.Add("Make taskbar solid", null, make_taskbar_default);
             taskbar_menu.DropDownItems.Add("Turn normal on full screen", null, make_taskbar_default_on_fullscreen);
 
             //add the traymenu
@@ -639,146 +625,104 @@ namespace LiveWall
             return true;
         }
 
-        private void make_taskbar_translucent(object sender, EventArgs e)
+        private void make_taskbar_invisible(object sender, EventArgs e)
         {
-            //make taskbar translucent so yeah
-            _taskbarstyle = "translucent";
-            //apply style
-            set_taskbar_style();
+            //make taskbar invisible so yeah
+            _taskbarstyle = "invisible";
+            IntPtr taskbar_handl = get_taskbar_handl(); 
+            if (taskbar_handl == IntPtr.Zero ) 
+            {
+                //if cannot find taskbar
+                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
+                return;
+            }
+            //apply the taskbar style
+            set_taskbar_style(AccentState.ACCENT_ENABLE_TRANSPARENTGRADIENT, Color.Transparent, 0); //this almost worked but it blurs the taskbar not making it visible throughly
+            Debug.WriteLine("Set taskbar to invisible");
             return;
         }
-
-        private void make_taskbar_opaque(object sender, EventArgs e)
+        private void make_taskbar_default(object sender, EventArgs e) 
+        {
+            _taskbarstyle = "default";
+            IntPtr taskbar_handl = get_taskbar_handl();
+            if (taskbar_handl == IntPtr.Zero)
+            {
+                //if cannot find taskbar
+                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
+                return;
+            }
+            //apply the taskbar style
+            set_taskbar_style(AccentState.ACCENT_DISABLED); 
+            Debug.WriteLine("Set taskbar to default");
+            return;
+        }
+        private void make_taskbar_opaque(object sender, EventArgs e) 
         {
             _taskbarstyle = "opaque";
-            //apply style
-            set_taskbar_style();
+            IntPtr taskbar_handl = get_taskbar_handl();
+            if (taskbar_handl == IntPtr.Zero)
+            {
+                //if cannot find taskbar
+                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
+                return;
+            }
+            //apply the taskbar style
+            set_taskbar_style(AccentState.ACCENT_ENABLE_BLURBEHIND);
+            Debug.WriteLine("Set taskbar to opaque");
             return;
         }
-
-        private void make_taskbar_glass(object sender, EventArgs e)
+        //credits to lively for c# implementation of TranslucentTB, you are the goat! 
+        //Well the code hasnt updated in like forever... And the win11 updates broke it...
+        //seemed like i have to make sense and translate cpp codes from translucentTB to c#
+        //or i could just drop in a copy of translucentTB in here and execute it...
+        private IntPtr get_taskbar_handl()
         {
-            _taskbarstyle = "glass";
-            //apply_style
-            set_taskbar_style();
-            return;
-        }
-
-        private void make_taskbar_default(object sender, EventArgs e)
-        {
-            _taskbarstyle = "none";
-            //apply style
-            set_taskbar_style();
-            return;
-        }
-
-        //credits to lively for c# implementation of TranslucentTB, you are the goat!
-        private List<IntPtr> get_taskbar_handles()
-        {
-            var taskbar_handles = new List<IntPtr>(2);
             //find the first taskbar handle
             IntPtr taskbar_handl = FindWindow("Shell_TrayWnd", null);
             if (taskbar_handl != IntPtr.Zero)
             {
-                Debug.WriteLine("Found Main taskbar: {0}", taskbar_handl);
-                taskbar_handles.Add(taskbar_handl);
+                Debug.WriteLine("Found taskbar: {0}", taskbar_handl);
             }
             else
             {
                 Debug.WriteLine("Error, cannot find the main taskbar handle for some reason.");
             }
-
-            //secondary handle(s)
-            taskbar_handl = FindWindow("Shell_SecondaryTrayWnd", null);
-            if (taskbar_handl != IntPtr.Zero)
-            {
-                Debug.WriteLine("Found Secondary taskbar: {0}", taskbar_handl);
-                taskbar_handles.Add(taskbar_handl);
-                Debug.WriteLine("Finding more taskbars...");
-                while (taskbar_handl != IntPtr.Zero)
-                {
-                    taskbar_handl = FindWindowEx(IntPtr.Zero, taskbar_handl, "Shell_SecondaryTrayWnd", IntPtr.Zero);
-                    if (taskbar_handl != IntPtr.Zero)
-                    {
-                        taskbar_handles.Add(taskbar_handl);
-                    }
-                }
-            }
-            else
-            {
-                Debug.WriteLine("Error, cannot find the 2nd taskbar handles for some reason.");
-            }
-
-            return taskbar_handles;
+            return taskbar_handl;
         }
 
-        private void set_taskbar_style()
+        //style helper
+        private void set_taskbar_style(AccentState state, Color? tint = null, byte opacity = 0)
         {
             //set the taskbar appearance yes sir
-            List<IntPtr> taskbar_handls = get_taskbar_handles();
-            if (taskbar_handls.Count == 0)
+            IntPtr taskbar_handl = get_taskbar_handl();
+            if (taskbar_handl == IntPtr.Zero)
             {
                 MessageBox.Show("Error, program cannot find the taskbar anywhere. Returning...");
                 return;
             }
 
-            //accents
-            AccentPolicy accent_policy = new AccentPolicy();
-
             save_configs();
-            
 
-            switch (_taskbarstyle)
-            {
-                case "none":
-                    //reset the taskbar style
-                    foreach (var taskbar in taskbar_handls)
-                    {
-                        SendMessage(taskbar, (int)TaskbarFlags.DWMCOMPOSITIONCHANGED, IntPtr.Zero, IntPtr.Zero);
-                    }
-                    Debug.WriteLine("Set taskbar to none.");
-                    return;
-                case "translucent":
-                    //set the taskbar translucent
-                    var accent_ptr = IntPtr.Zero;
-                    try
-                    {
-                        //manually set the accent policy
-                        accent_policy.GradientColor = 16777215;
-                        accent_policy.AccentState = AccentState.ACCENT_ENABLE_TRANSPARENTGRADIENT;
+            AccentPolicy accent = new AccentPolicy();
+            accent.AccentState = state;
 
-                        var accent_struct_size = Marshal.SizeOf(accent_policy);
-                        accent_ptr = Marshal.AllocHGlobal(accent_struct_size);
-                        Marshal.StructureToPtr(accent_policy, accent_ptr, false);
+            //argb
+            int color = (opacity << 24) | (tint?.ToArgb() ?? 0);
 
-                        var data = new WindowCompositionAttributeData
-                        {
-                            Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
-                            SizeOfData = accent_struct_size,
-                            Data = accent_ptr
-                        };
+            accent.GradientColor = color;
 
-                        //now set all
-                        foreach (var taskbar in taskbar_handls)
-                        {
-                            SetWindowCompositionAttribute(taskbar, ref data);
-                        }
+            IntPtr accentPtr = Marshal.AllocHGlobal(Marshal.SizeOf(accent));
+            Marshal.StructureToPtr(accent, accentPtr, false);
 
-                    }
-                    catch (Exception e)
-                    {
-                        MessageBox.Show("Error: Error occured while setting taskbar style: {0}", e.ToString());
-                    }
-                    finally
-                    {
-                        //dipose 
-                        Debug.WriteLine("Set taskbar to translucent.");
-                        Marshal.FreeHGlobal(accent_ptr);
-                    }
-                    return;
-                default:
-                    return;
-            }
+            WindowCompositionAttributeData data = new WindowCompositionAttributeData();
+            data.Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY;
+            data.SizeOfData = Marshal.SizeOf(accent);
+            data.Data = accentPtr;
+
+            SetWindowCompositionAttribute(taskbar_handl, ref data);
+
+            Marshal.FreeHGlobal(accentPtr);
+
         }
 
         private void make_taskbar_default_on_fullscreen(object sender, EventArgs e)
@@ -1141,50 +1085,39 @@ namespace LiveWall
         //taskbar ultils
 
         [DllImport("user32.dll")]
+        private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
 
-        private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
-
-        private enum TaskbarFlags : uint
+        private enum AccentState
         {
-            DWMCOMPOSITIONCHANGED = 0x031E,
+            ACCENT_DISABLED = 0,
+            ACCENT_ENABLE_GRADIENT = 1,
+            ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
+            ACCENT_ENABLE_BLURBEHIND = 3,
+            ACCENT_ENABLE_ACRYLICBLURBEHIND = 4,
+            ACCENT_ENABLE_HOSTBACKDROP = 5,
+            ACCENT_INVALID_STATE = 6
         }
 
-        [DllImport("user32.dll")]
-        internal static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
+        [StructLayout(LayoutKind.Sequential)]
+        private struct AccentPolicy
+        {
+            public AccentState AccentState;
+            public int AccentFlags;
+            public int GradientColor;
+            public int AnimationId;
+        }
 
         [StructLayout(LayoutKind.Sequential)]
-        internal struct WindowCompositionAttributeData
+        private struct WindowCompositionAttributeData
         {
             public WindowCompositionAttribute Attribute;
             public IntPtr Data;
             public int SizeOfData;
         }
 
-
-        //pasted from lively... also apparently it is also undocumented O_O
-        internal enum WindowCompositionAttribute
+        private enum WindowCompositionAttribute
         {
-            // ...
             WCA_ACCENT_POLICY = 19
-            // ...
-        }
-
-        internal enum AccentState
-        {
-            ACCENT_DISABLED = 0,
-            ACCENT_ENABLE_GRADIENT = 1,
-            ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
-            ACCENT_ENABLE_BLURBEHIND = 3,
-            ACCENT_ENABLE_FLUENT = 4 //don't like alpha = 0
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        internal struct AccentPolicy
-        {
-            public AccentState AccentState;
-            public int AccentFlags;
-            public uint GradientColor; //AABBGGRR
-            public int AnimationId;
         }
     }
 }
