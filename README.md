@@ -2,6 +2,12 @@
 
 A system tray application that sets the user's live wallpapers
 
+# Current Features in Development
+
+- Render Scene based Live Wallpaper (attacking the json files)
+- Add support to load Gif and Picture files (Halted)
+- Add other Video renderer [mpv,...] (Halted)
+
 ## Dependencies (tbh idk if they count or not)
 
 ### LibVLCSharp
@@ -9,6 +15,10 @@ A system tray application that sets the user's live wallpapers
 ### LibVLCSharp.WinForms
 
 ### TagLibSharp
+
+### OpenTK
+
+### RePKG from https://github.com/notscuffed/repkg
 
 ### 2 Modes
 
