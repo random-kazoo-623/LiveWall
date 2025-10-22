@@ -1,31 +1,37 @@
 using LibVLCSharp.Shared;
 using LibVLCSharp.WinForms;
+using LiveWall.Scripts;
+using Microsoft.Toolkit.Uwp.Notifications;
 using Microsoft.VisualBasic;
 using Microsoft.Win32;
 using System;
 using System.Diagnostics;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Linq.Expressions;
 using System.Reflection.Metadata.Ecma335;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
 using TagLib;
-using Xamarin.Forms.StyleSheets;
 using static System.Windows.Forms.AxHost;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
+using OpenTK.Core;
 using File = System.IO.File;
 namespace LiveWall
 {
     public partial class Form1 : Form
     {
+
         //restructure some variables
         private LibVLC _libvlc;
         private MediaPlayer _player;
         private VideoView _videoview;
 
         private ContextMenuStrip _menuStrip;
+        private NotifyIcon _trayicon;
 
         //load settings
         private string _videolink = Properties.Settings.Default.video_link;
@@ -33,7 +39,9 @@ namespace LiveWall
         private string _rendermode = Properties.Settings.Default.render_mode;
         private int _videoloopmaxduration = Properties.Settings.Default.video_loop_max_duration;
         private string _taskbarstyle = Properties.Settings.Default.taskbar_style;
-        private bool _taskbar_default_on_fullscreen = Properties.Settings.Default.taskbar_default_on_fullscreen;
+        //private bool _taskbar_default_on_fullscreen = Properties.Settings.Default.taskbar_default_on_fullscreen; NOT IMPLEMENTED
+
+        private bool is_scene_pkg = false;
 
 
         private List<string> _videolist = new List<string>();
@@ -42,6 +50,7 @@ namespace LiveWall
 
         public Form1()
         {
+            //main
             InitializeComponent();
 
             /*
@@ -65,13 +74,18 @@ namespace LiveWall
             _player = new MediaPlayer(_libvlc);
 
             //will pick 1 videos only and save its link to a text file
-            var result = get_videos();
+            var result = videos_utilities.get_videos();
 
 
             if (!Directory.Exists(result))
             {
                 //single file
                 _videolink = result;
+            }
+            else if (result == "")
+            {
+                MessageBox.Show("User not want to set wallpaper(s), exiting...");
+                this.Close();
             }
             else
             {
@@ -101,6 +115,10 @@ namespace LiveWall
                 //init system tray icon for iteractions
                 init_system_tray_icon();
 
+                _videolink = """C:\Users\minh\Desktop\3583974091_VSTHEMES-ORG\gifscene.pkg""";
+                play_scene();
+                Application.Exit();
+                return;
                 //check render mode to correctly reflect the previous saved application state
                 if (_rendermode == "multiple")
                 {
@@ -120,8 +138,8 @@ namespace LiveWall
                 var timer = new System.Windows.Forms.Timer { Interval = 300 };
                 timer.Tick += (sender, e) =>
                 {
-                    //Debug.WriteLine("Checking for apps...");
-                    bool is_fsc = is_full_screen(workerw);
+                    //Debug.WriteLine("Checking for full screen...");
+                    bool is_fsc = other_utilities.is_full_screen(workerw, _videoview, this.Handle, this.ProductName);
 
                     if (is_fsc)
                     {
@@ -150,7 +168,7 @@ namespace LiveWall
                 Application.Exit();
             }
         }
-
+        #region WorkerW
         private IntPtr get_workerw()
         {
             IntPtr progman = FindWindow("Progman", "");
@@ -196,25 +214,16 @@ namespace LiveWall
                 return true;
             }), IntPtr.Zero);
 
-            //try one more time on progman if WorkerW still hasnt been found
-            if (workerw == IntPtr.Zero)
-            {
-                Debug.WriteLine("Trying 1 more time just to be sure");
-                workerw = FindWindowEx(progman, IntPtr.Zero, "WorkerW", IntPtr.Zero);
-                Debug.WriteLine("Found WorkerW? Process {0}", workerw);
-
-            }
-
             //METHOD TREE, YES TREE.
             //credits to lively maybe
             if (workerw == IntPtr.Zero)
             {
-                workerw = get_worker_w_slave();
+                Debug.WriteLine("Trying every params to find WorkerW");
+                workerw = get_worker_w_force();
             }
             return workerw;
         }
-
-        private IntPtr get_worker_w_slave()
+        private IntPtr get_worker_w_force()
         {
             //yes yes very controversial name
             IntPtr result = IntPtr.Zero;
@@ -243,110 +252,31 @@ namespace LiveWall
                 if (workerw != IntPtr.Zero)
                 {
                     //if found
+                    Debug.WriteLine("Found WorkerW, process {0}", workerw);
                     return workerw;
                 }
             }
 
-            //if not found then brute force by interating all the windows, creds to shittim canvas for this ig
+            //if not found then brute force by iterating all the windows, creds to shittim canvas for this ig
             //not now
             return IntPtr.Zero;
         }
 
-        private string get_videos()
-        {
-            //checks if the current render mode is singular or multiple
-            if (_rendermode == "")
-            {
-                _rendermode = "single";
-            }
-
-            switch (_rendermode)
-            {
-                case "single":
-                    if (!File.Exists(_videolink) || string.IsNullOrEmpty(_videolink))
-                    {
-                        //if file does not exist
-                        MessageBox.Show("Error, video file/wallpaper not found, is the file deleted?");
-                    }
-                    else
-                    {
-                        return _videolink;
-                    }
-
-                    if (_videolink == "" || !File.Exists(_videolink))
-                    {
-                        //ask the user for the video path and then writes it to text_path
-                        OpenFileDialog openFileDialog = new OpenFileDialog();
-                        openFileDialog.Filter = "Video files (*.mp4)|*.mp4| GIF files (*.gif)|*.gif| MOV files (*.mov)|*.mov| MKV files (*.mkv)|*.mkv| AVI files (*.avi)|*.avi";
-                        openFileDialog.CheckFileExists = true;
-                        openFileDialog.Title = "Choose a live wallpaper";
-
-                        try
-                        {
-                            DialogResult result = openFileDialog.ShowDialog();
-                            if (result == DialogResult.OK)
-                            {
-                                _videolink = openFileDialog.FileName;
-                                save_configs();
-                                return _videolink;
-                            }
-                            else if (result == DialogResult.Cancel)
-                            {
-                                MessageBox.Show("User cancelled file input, returning...");
-                                return "";
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            MessageBox.Show("Error: could not read file from disk or something went horribly wrong. " + e);
-                        }
-                    }
-                    return _videolink;
-                case "multiple":
-                    generate_playlist();
-                    break;
-                default:
-                    Debug.WriteLine("Unexpected value of render type, reseting the property...");
-                    _rendermode = "";
-                    return "";
-            }
-            //just in case
-            return "";
-        }
-
+        #endregion WorkerW
         private bool start_playing()
         {
             //checks for null video files
-            if (_rendermode == "single" && string.IsNullOrEmpty(_videolink))
+            if (_rendermode == "single" && !File.Exists(_videolink))
             {
                 //if single and no video is found
                 //tries to read from the settings
                 _videolink = Properties.Settings.Default.video_link;
                 if (string.IsNullOrEmpty(_videolink))
                 {
-                    //if not then ask the user for 1
-                    MessageBox.Show("Error, video file/wallpaper not found, is the file deleted?");
-                    OpenFileDialog openFileDialog = new OpenFileDialog();
-                    openFileDialog.Filter = "Video files (*.mp4)|*.mp4| GIF files (*.gif)|*.gif| MOV files (*.mov)|*.mov| MKV files (*.mkv)|*.mkv| AVI files (*.avi)|*.avi";
-                    openFileDialog.CheckFileExists = true;
-                    openFileDialog.Title = "Choose a live wallpaper";
-
-                    try
+                    string result = file_utilities.get_file();
+                    if (!string.IsNullOrEmpty(result))
                     {
-                        DialogResult result = openFileDialog.ShowDialog();
-                        if (result == DialogResult.OK)
-                        {
-                            _videolink = openFileDialog.FileName;
-                            save_configs();
-                        }
-                        else if (result == DialogResult.Cancel)
-                        {
-                            MessageBox.Show("User cancelled file input, returning...");
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        MessageBox.Show("Error: could not read file from disk or something went horribly wrong. " + e);
+                        _videolink = result;
                     }
                 }
             }
@@ -362,7 +292,7 @@ namespace LiveWall
             {
                 //tries to read from setting
                 _videofolder = Properties.Settings.Default.video_folder;
-                generate_playlist();
+                _videolist = videos_utilities.generate_playlist(_videofolder);
             }
 
             //if after asking
@@ -371,19 +301,36 @@ namespace LiveWall
                 return false;
             }
 
+            //checks the video if it is a pkg file
+            if (_rendermode == "single" && Path.GetExtension(_videolink) == ".pkg")
+            {
+                //redirect to scene based renderer and hides the current player
+                _videoview.Visible = false;
+                bool result = play_scene();
+                if (!result)
+                {
+                    return false;
+                }
+                else return true;
+            }
+
             Media media;
             //use vlc to play a video repetively
             if (_rendermode == "single")
             {
                 media = new Media(_libvlc, _videolink, FromType.FromPath);
+                if (_videoview.Visible = false)
+                {
+                    _videoview.Visible = true;
+                }
             }
             else if (_rendermode == "multiple")
             {
                 //just generate another randomised playlist
-                generate_playlist();
+                _videolist = videos_utilities.generate_playlist();
                 media = new Media(_libvlc, _videolist[_videolistorder], FromType.FromPath);
                 //calculate time
-                double duration = get_video_duration(_videolist[_videolistorder]);
+                double duration = videos_utilities.get_video_duration(_videolist[_videolistorder]);
                 //Debug.WriteLine("duration {0}", duration);
                 //convert to seconds
                 int time = Convert.ToInt32(duration);
@@ -434,7 +381,7 @@ namespace LiveWall
                         }
                         media = new Media(_libvlc, _videolist[_videolistorder], FromType.FromPath);
                         //calculate time
-                        double duration = get_video_duration(_videolist[_videolistorder]);
+                        double duration = videos_utilities.get_video_duration(_videolist[_videolistorder]);
                         //Debug.WriteLine("duration {0}", duration);
                         //convert to seconds
                         int time = Convert.ToInt32(duration);
@@ -456,132 +403,48 @@ namespace LiveWall
             return true;
         }
 
-        private void generate_playlist()
+        /// <summary>
+        /// Play the scene pkg using renderers
+        /// </summary>
+        /// <returns>bool result</returns>
+        private bool play_scene()
         {
-            //checks if playlist folder exist
-            if (!Directory.Exists(_videofolder) || _videofolder == "")
-            {
-                //if folder not exist, ask the user for one
-                MessageBox.Show("Please choose the folder containing the wallpapers.");
-                FolderBrowserDialog folder_browser_dialog = new FolderBrowserDialog();
-                folder_browser_dialog.SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
-                folder_browser_dialog.Description = "Select the wallpaper video folder:";
+            //display a notification
+            NotifyIcon progress = new NotifyIcon();
+            _trayicon.ShowBalloonTip(2000, "Setting scene Wallpaper...", "Unpacking and setting up the scene wallpaper, please be patient...", ToolTipIcon.Warning);
 
-                if (folder_browser_dialog.ShowDialog() == DialogResult.OK)
+            progress.Dispose();
+
+
+            //extract the pkg file
+            string  result = other_utilities.extract_pkg(_videolink);
+            if (string.IsNullOrEmpty(result))
+            {
+                return false;
+            }
+
+            //we will have the directory
+
+            var scene_json = result + "gifscene.json";
+            if (!File.Exists(scene_json))
+            {
+                //if gifscene.json not found
+                scene_json = result + "scene.json";
+                if (File.Exists(scene_json))
                 {
-                    _videofolder = folder_browser_dialog.SelectedPath;
+                    //if nothing found after extracting
+                    Debug.WriteLine("Error: main scene json not found in directory {0}", result);
+                    return false;
                 }
             }
 
-            //now fetchs all files
-            string[] files = Directory.GetFiles(_videofolder);
-            List<string> video_files = new List<string>();
-            //change to list for items manipulation
-            foreach (string file in files)
-            {
-                //Debug.WriteLine("checking extension {0}...", Path.GetExtension(file));
-                switch (Path.GetExtension(file))
-                {
-                    case ".mp4":
-                        //Debug.WriteLine("Added {0}", file);
-                        video_files.Add(file);
-                        break;
-                    case ".avi":
-                        //Debug.WriteLine("Added {0}", file);
-                        video_files.Add(file);
-                        break;
-                    case ".mkv":
-                        //Debug.WriteLine("Added {0}", file);
-                        video_files.Add(file);
-                        break;
-                    case ".mov":
-                        //Debug.WriteLine("Added {0}", file);
-                        video_files.Add(file);
-                        break;
-                    case "gif":
-                        //Debug.WriteLine("Added {0}", file);
-                        video_files.Add(file);
-                        break;
-                    default:
-                        //Debug.WriteLine("Did not add {0}", file);
-                        break;
-                }
-            }
+            //read the scene json
+            var root = JsonSerializer.Deserialize<SceneClass.GifScene>(File.ReadAllText(scene_json));
 
-            //now that every file should be a playable media
-            Random r = new Random();
-            List<int> random_order = new List<int>();
-            int count = 0;
-            while (count < video_files.Count)
-            {
-                int number = r.Next(video_files.Count);
-                bool ispresent = random_order.Contains(number);
-                if (ispresent)
-                {
-                    //Debug.WriteLine($"loser {number}");
-                    continue;
-                }
-                else
-                {
-                    //Debug.WriteLine($"winner {number}");
-                    random_order.Add(number);
-                    count++;
-                }
-                if (count == video_files.Count)
-                {
-                    break;
-                }
-            }
-
-            List<string> playlist = new List<string>();
-            for (int i = 0; i < video_files.Count; i++)
-            {
-                //Debug.WriteLine(ramdon[i].ToString());
-                playlist.Add(files[random_order[i]]);
-                //Debug.WriteLine("added " + files[random_order[i]].ToString());
-            }
-            _videolist = playlist;
+            return false;
         }
 
-        private double get_video_duration(string video_path)
-        {
-            //new new method since old one got bugged out smh
-
-            //checks if ffprobe is installed:
-            string ffprobe_abs_path = $"C:\ffmpeg\bin\ffprobe.exe";
-            if (File.Exists(ffprobe_abs_path))
-            {
-                //if ffprobe is installed
-                var psi = new ProcessStartInfo
-                {
-                    FileName = ffprobe_abs_path,
-                    Arguments = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{video_path}\"",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using (var process = Process.Start(psi))
-                {
-                    string result = process.StandardOutput.ReadToEnd();
-                    process.WaitForExit();
-
-                    if (double.TryParse(result, System.Globalization.NumberStyles.Any,
-                        System.Globalization.CultureInfo.InvariantCulture, out double seconds))
-                    {
-                        return seconds;
-                    }
-                }
-            }
-            else Debug.WriteLine("ffprobe is not installed");
-
-            //if ffprobe is not installed, use taglib
-            using (var file = TagLib.File.Create(video_path))
-            {
-                return file.Properties.Duration.TotalSeconds;
-            }
-        }
-
+        #region tray icon
         private bool init_system_tray_icon()
         {
             //LOL GIT DID NOT SAVE FOR ME AAAA
@@ -592,22 +455,23 @@ namespace LiveWall
             _menuStrip.Items.Add(new ToolStripSeparator());
             _menuStrip.Items.Add("Open Wallpaper Folder", null, open_wallpaper_location);
 
-            //create taskbar traymenu dropdown box
-            var taskbar_menu = new ToolStripMenuItem("Taskbar Options");
-            taskbar_menu.DropDownItems.Add("Make taskbar invisible (fully)", null, make_taskbar_invisible);
-            taskbar_menu.DropDownItems.Add("Make taskbar opaque", null, make_taskbar_opaque);
-            taskbar_menu.DropDownItems.Add("Make taskbar solid", null, make_taskbar_default);
-            taskbar_menu.DropDownItems.Add("Turn normal on full screen", null, make_taskbar_default_on_fullscreen);
+            //NOT IMPLEMENTED/REMOVED FEATURES
+            ////create taskbar traymenu dropdown box
+            //var taskbar_menu = new ToolStripMenuItem("Taskbar Options");
+            //taskbar_menu.DropDownItems.Add("Make taskbar invisible (fully)", null, make_taskbar_invisible);
+            //taskbar_menu.DropDownItems.Add("Make taskbar opaque", null, make_taskbar_opaque);
+            //taskbar_menu.DropDownItems.Add("Make taskbar solid", null, make_taskbar_default);
+            //taskbar_menu.DropDownItems.Add("Turn normal on full screen", null, make_taskbar_default_on_fullscreen);
 
-            //add the traymenu
-            _menuStrip.Items.Add(new ToolStripSeparator());
-            _menuStrip.Items.Add(taskbar_menu);
+            ////add the traymenu
+            //_menuStrip.Items.Add(new ToolStripSeparator());
+            //_menuStrip.Items.Add(taskbar_menu);
 
             _menuStrip.Items.Add(new ToolStripSeparator());
             _menuStrip.Items.Add("Exit", null, exit_wallpaper);
 
 
-            NotifyIcon tray_icon = new NotifyIcon
+            _trayicon = new NotifyIcon
             {
                 Visible = true,
                 Text = "Live Wallpaper",
@@ -619,121 +483,6 @@ namespace LiveWall
             return true;
         }
 
-        private void make_taskbar_invisible(object sender, EventArgs e)
-        {
-            //make taskbar invisible so yeah
-            _taskbarstyle = "invisible";
-            IntPtr taskbar_handl = get_taskbar_handl(); 
-            if (taskbar_handl == IntPtr.Zero ) 
-            {
-                //if cannot find taskbar
-                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
-                return;
-            }
-            //apply the taskbar style
-            set_taskbar_style(AccentState.ACCENT_ENABLE_TRANSPARENTGRADIENT, Color.Transparent, 0); //this almost worked but it blurs the taskbar not making it visible throughly
-            Debug.WriteLine("Set taskbar to invisible");
-            return;
-        }
-        private void make_taskbar_default(object sender, EventArgs e) 
-        {
-            _taskbarstyle = "default";
-            IntPtr taskbar_handl = get_taskbar_handl();
-            if (taskbar_handl == IntPtr.Zero)
-            {
-                //if cannot find taskbar
-                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
-                return;
-            }
-            //apply the taskbar style
-            set_taskbar_style(AccentState.ACCENT_DISABLED); 
-            Debug.WriteLine("Set taskbar to default");
-            return;
-        }
-        private void make_taskbar_opaque(object sender, EventArgs e) 
-        {
-            _taskbarstyle = "opaque";
-            IntPtr taskbar_handl = get_taskbar_handl();
-            if (taskbar_handl == IntPtr.Zero)
-            {
-                //if cannot find taskbar
-                MessageBox.Show("Error, cannot set the taskbar style due to the taskbar doesn't exist?");
-                return;
-            }
-            //apply the taskbar style
-            set_taskbar_style(AccentState.ACCENT_ENABLE_BLURBEHIND);
-            Debug.WriteLine("Set taskbar to opaque");
-            return;
-        }
-        //credits to lively for c# implementation of TranslucentTB, you are the goat! 
-        //Well the code hasnt updated in like forever... And the win11 updates broke it...
-        //seemed like i have to make sense and translate cpp codes from translucentTB to c#
-        //or i could just drop in a copy of translucentTB in here and execute it...
-        private IntPtr get_taskbar_handl()
-        {
-            //find the first taskbar handle
-            IntPtr taskbar_handl = FindWindow("Shell_TrayWnd", null);
-            if (taskbar_handl != IntPtr.Zero)
-            {
-                Debug.WriteLine("Found taskbar: {0}", taskbar_handl);
-            }
-            else
-            {
-                Debug.WriteLine("Error, cannot find the main taskbar handle for some reason.");
-            }
-            return taskbar_handl;
-        }
-
-        //style helper
-        private void set_taskbar_style(AccentState state, Color? tint = null, byte opacity = 0)
-        {
-            //set the taskbar appearance yes sir
-            IntPtr taskbar_handl = get_taskbar_handl();
-            if (taskbar_handl == IntPtr.Zero)
-            {
-                MessageBox.Show("Error, program cannot find the taskbar anywhere. Returning...");
-                return;
-            }
-
-            save_configs();
-
-            AccentPolicy accent = new AccentPolicy();
-            accent.AccentState = state;
-
-            //argb
-            int color = (opacity << 24) | (tint?.ToArgb() ?? 0);
-
-            accent.GradientColor = color;
-
-            IntPtr accentPtr = Marshal.AllocHGlobal(Marshal.SizeOf(accent));
-            Marshal.StructureToPtr(accent, accentPtr, false);
-
-            WindowCompositionAttributeData data = new WindowCompositionAttributeData();
-            data.Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY;
-            data.SizeOfData = Marshal.SizeOf(accent);
-            data.Data = accentPtr;
-
-            SetWindowCompositionAttribute(taskbar_handl, ref data);
-
-            Marshal.FreeHGlobal(accentPtr);
-
-        }
-
-        private void make_taskbar_default_on_fullscreen(object sender, EventArgs e)
-        {
-            //NOT IMPLEMENTED
-            if (_taskbar_default_on_fullscreen == true)
-            {
-                //disable it and display the current taskbar style instead
-                _taskbar_default_on_fullscreen = false;
-            }
-            else
-            {
-                _taskbar_default_on_fullscreen = true;
-            }
-            return;
-        }
-
         private void reload_wallpaper(object sender, EventArgs e)
         {
             if (_rendermode == "single")
@@ -741,8 +490,18 @@ namespace LiveWall
                 Media media;
                 if (string.IsNullOrEmpty(_videolink) || !File.Exists(_videolink))
                 {
-                    get_videos();
+                    videos_utilities.get_videos();
+                    _videolink = configs_utilities.Sync(videolink: "load");
                 }
+
+                //if the file is a pkg file
+                if (Path.GetExtension(_videolink) == ".pkg")
+                {
+                    _videoview.Visible = false;
+                    play_scene();
+                    return;
+                }
+
                 try
                 {
                     media = new Media(_libvlc, _videolink, FromType.FromPath);
@@ -750,6 +509,7 @@ namespace LiveWall
                 catch (Exception ex)
                 {
                     //if for some reason _videolink IS STILL EMPTY
+                    //load video link from setting file
                     _videolink = Properties.Settings.Default.video_link;
                     media = new Media(_libvlc, _videolink, FromType.FromPath);
                 }
@@ -760,11 +520,11 @@ namespace LiveWall
             else
             {
                 //re generate playlist
-                generate_playlist();
+                _videolist = videos_utilities.generate_playlist();
                 _videolistorder = 0;
                 Media media = new Media(_libvlc, _videolist[_videolistorder], FromType.FromPath);
                 //calculate time
-                double duration = get_video_duration(_videolist[_videolistorder]);
+                double duration = videos_utilities.get_video_duration(_videolist[_videolistorder]);
                 //Debug.WriteLine("duration {0}", duration);
                 //convert to seconds
                 int time = Convert.ToInt32(duration);
@@ -779,41 +539,15 @@ namespace LiveWall
         {
             if (_rendermode == "single")
             {
-                OpenFileDialog openFileDialog = new OpenFileDialog();
-                //openFileDialog.Filter = "Video files (*.mp4)|*.mp4| GIF files (*.gif)|*.gif| MOV files (*.mov)|*.mov| MKV files (*.mkv)|*.mkv| AVI files (*.avi)|*.avi";
-                openFileDialog.CheckFileExists = true;
-                openFileDialog.Title = "Choose a live wallpaper";
-                DialogResult result = openFileDialog.ShowDialog();
-                if (result == DialogResult.OK)
-                {
-                    _videolink = openFileDialog.FileName;
-                    save_configs();
-                    reload_wallpaper(null, null);
-                }
-                else if (result == DialogResult.Cancel)
-                {
-                    MessageBox.Show("User cancelled file input, returning...");
-                    return;
-                }
+                _videolink = videos_utilities.get_videos();
+                configs_utilities.Save(videolink: _videolink);
+                reload_wallpaper(null, null);
             }
             else if (_rendermode == "multiple")
             {
-                MessageBox.Show("Please choose the folder containing the wallpapers.");
-                FolderBrowserDialog folder_browser_dialog = new FolderBrowserDialog();
-                folder_browser_dialog.SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
-                folder_browser_dialog.Description = "Select the wallpaper video folder:";
+                _videolist = videos_utilities.generate_playlist();
+                reload_wallpaper(null, null);
 
-                if (folder_browser_dialog.ShowDialog() == DialogResult.OK)
-                {
-                    _videofolder = folder_browser_dialog.SelectedPath;
-                    save_configs();
-                    reload_wallpaper(null, null);
-                }
-                else if (folder_browser_dialog.ShowDialog() == DialogResult.Cancel)
-                {
-                    MessageBox.Show("User cancelled folder input, returning...");
-                    return;
-                }
             }
 
         }
@@ -847,7 +581,7 @@ namespace LiveWall
 
         private void exit_wallpaper(object sender, EventArgs e)
         {
-            save_configs();
+            configs_utilities.Save(rendermode: _rendermode, videofolder: _videofolder, videolink: _videolink, videoloopmaxduration: _videoloopmaxduration, taskbarstyle: _taskbarstyle);
             Application.Exit();
         }
 
@@ -858,7 +592,17 @@ namespace LiveWall
             {
                 _videolistorder = 0;
             }
-            reload_wallpaper(null, null);
+            //re load the wallpaper
+
+            Media media = new Media(_libvlc, _videolist[_videolistorder], FromType.FromPath);
+            //calculate time
+            double duration = videos_utilities.get_video_duration(_videolist[_videolistorder]);
+            //Debug.WriteLine("duration {0}", duration);
+            //convert to seconds
+            int time = Convert.ToInt32(duration);
+            //Debug.WriteLine("length {0}", time);
+            _videoplaybackcount = get_repeat_count(time);
+            BeginInvoke(new Action(() => _player.Play(media)));
             Debug.WriteLine("Skipping wallpaper");
         }
 
@@ -891,9 +635,10 @@ namespace LiveWall
                 //make sure the user dont enter something invalid
                 _videoloopmaxduration = 180;
             }
-            save_configs();
+            configs_utilities.Save(videoloopmaxduration: _videoloopmaxduration);
             return;
         }
+        
         private void open_wallpaper_location(object sender, EventArgs e)
         {
             if (_rendermode == "single")
@@ -907,73 +652,6 @@ namespace LiveWall
             return;
         }
 
-        private bool is_full_screen(IntPtr workerw)
-        {
-            IntPtr foreground_window = GetForegroundWindow();
-            //checks if nothing returns or the appication is from the app itself
-            if (foreground_window == IntPtr.Zero || foreground_window == _videoview.MediaPlayer.Hwnd || foreground_window == this.Handle || foreground_window == workerw)
-            {
-                return false;
-            }
-
-            string process_name = get_process_name(foreground_window);
-            GetWindowRect(foreground_window, out RECT rect);
-
-            if (process_name == "explorer" || process_name == "" || process_name == this.ProductName)
-            {
-                //if no process found or it is explorer
-                //Debug.WriteLine("Not sus process {0}", process_name);
-                return false;
-            }
-
-            int screen_width = GetSystemMetrics(SM_CXSCREEN);
-            int screen_height = GetSystemMetrics(SM_CYSCREEN);
-
-            //debug
-            //Debug.WriteLine("width : {0}", screen_width);
-            //Debug.WriteLine("height: {0}", screen_height);
-            //Debug.WriteLine("process: {0}", process_name);
-
-            //Debug.WriteLine(rect.Left.ToString());
-            //Debug.WriteLine(rect.Right.ToString());
-            //Debug.WriteLine(rect.Top.ToString());
-            //Debug.WriteLine(rect.Bottom.ToString());
-
-            //checks if the focused process dimension surpass a certain value
-
-            if (rect.Left <= 0 && rect.Top <= 0 && rect.Right >= screen_width && rect.Bottom >= screen_height - 100)
-            {
-                //Debug.WriteLine("Pausing video");
-                return true;
-            }
-            //Debug.WriteLine("Resuming video");
-            return false;
-        }
-
-        private string get_process_name(IntPtr hWnd)
-        {
-            uint process_id;
-            GetWindowThreadProcessId(hWnd, out process_id);
-
-            //if found a valid process 
-            if (process_id != 0)
-            {
-                try
-                {
-                    Process process = Process.GetProcessById((int)process_id);
-                    return process.ProcessName;
-                }
-                catch (Exception e)
-                {
-                    Debug.WriteLine("Failed to retrive process name of {0}, error code: {1}.", process_id, e);
-                    return "";
-                }
-            }
-            //if nothing found
-            return "";
-
-        }
-
         private int get_repeat_count(int time)
         {
             int result = 0;
@@ -985,24 +663,16 @@ namespace LiveWall
             return result;
         }
 
-        private void save_configs()
-        {
-            Properties.Settings.Default.render_mode = _rendermode;
-            Properties.Settings.Default.video_folder = _videofolder;
-            Properties.Settings.Default.video_link = _videolink;
-            Properties.Settings.Default.video_loop_max_duration = _videoloopmaxduration;
-            Properties.Settings.Default.taskbar_style = _taskbarstyle;
-            Properties.Settings.Default.taskbar_default_on_fullscreen = _taskbar_default_on_fullscreen;
-            Properties.Settings.Default.Save();
-            return;
-        }
-
         private void form_closing(object sender, FormClosingEventArgs e)
         {
-            save_configs();
+            configs_utilities.Save(rendermode: _rendermode, videofolder: _videofolder, videolink: _videolink, videoloopmaxduration: _videoloopmaxduration, taskbarstyle: _taskbarstyle);
             Thread.Sleep(300);
             return;
         }
+
+        #endregion tray icon
+
+        #region DLL imports
         //DLLs
         [DllImport("user32.dll")]
         public static extern IntPtr FindWindow(string className, string winName);
@@ -1050,70 +720,7 @@ namespace LiveWall
                 return cp;
             }
         }
-
-        //DLLs for window size detection
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
-
-        [DllImport("user32.dll")]
-        private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-        [DllImport("user32.dll")]
-        private static extern int GetSystemMetrics(int nIndex);
-
-        private const int SM_CXSCREEN = 0;
-        private const int SM_CYSCREEN = 1;
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct RECT
-        {
-            public int Left;
-            public int Top;
-            public int Right;
-            public int Bottom;
-        }
-
-        [DllImport("user32.dll")]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-
-        //taskbar ultils
-
-        [DllImport("user32.dll")]
-        private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
-
-        private enum AccentState
-        {
-            ACCENT_DISABLED = 0,
-            ACCENT_ENABLE_GRADIENT = 1,
-            ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
-            ACCENT_ENABLE_BLURBEHIND = 3,
-            ACCENT_ENABLE_ACRYLICBLURBEHIND = 4,
-            ACCENT_ENABLE_HOSTBACKDROP = 5,
-            ACCENT_INVALID_STATE = 6
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct AccentPolicy
-        {
-            public AccentState AccentState;
-            public int AccentFlags;
-            public int GradientColor;
-            public int AnimationId;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct WindowCompositionAttributeData
-        {
-            public WindowCompositionAttribute Attribute;
-            public IntPtr Data;
-            public int SizeOfData;
-        }
-
-        private enum WindowCompositionAttribute
-        {
-            WCA_ACCENT_POLICY = 19
-        }
+        #endregion DLL imports
     }
 }
 
