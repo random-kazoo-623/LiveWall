@@ -115,7 +115,7 @@ namespace LiveWall
                 //init system tray icon for iteractions
                 init_system_tray_icon();
 
-                _videolink = """C:\Users\minh\Desktop\3583974091_VSTHEMES-ORG\gifscene.pkg""";
+                _videolink = """C:\Users\nongn\Desktop\2967775993_VSTHEMES-ORG\scene.pkg""";
                 play_scene();
                 Application.Exit();
                 return;
@@ -429,7 +429,8 @@ namespace LiveWall
             if (!File.Exists(scene_json))
             {
                 //if gifscene.json not found
-                scene_json = result + "scene.json";
+                scene_json = result + """\scene.json""";
+                SceneClass
                 if (File.Exists(scene_json))
                 {
                     //if nothing found after extracting
