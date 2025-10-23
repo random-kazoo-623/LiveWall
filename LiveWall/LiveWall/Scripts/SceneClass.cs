@@ -1,12 +1,14 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Diagnostics.Eventing.Reader;
 using System.Security.Permissions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using static LiveWall.Scripts.SceneClass;
+using JsonConverter = Newtonsoft.Json.JsonConverterAttribute;
 using JsonExtensionData = Newtonsoft.Json.JsonExtensionDataAttribute;
 using JsonIgnore = Newtonsoft.Json.JsonIgnoreAttribute;
 using JsonSerializer = Newtonsoft.Json.JsonSerializer;
-using JsonConverter = Newtonsoft.Json.JsonConverterAttribute;
 namespace LiveWall.Scripts
 {
     internal class SceneClass
@@ -20,6 +22,8 @@ namespace LiveWall.Scripts
             [JsonProperty("objects")]
             [JsonConverter(typeof(SceneObjectConverter))]
             public List<SceneObjects> Objects { get; set; }
+
+            public Version Version { get; set; }
         }
 
         public class CameraData
@@ -139,7 +143,7 @@ namespace LiveWall.Scripts
             [JsonProperty("objecteffect")]
             public ObjectEffect? ObjectEffect { get; set; }
             [JsonProperty("objectparticle")]
-            public ObjectParticle? ObjectParticle { get; set; }
+            public ObjectImage? ObjectImage { get; set; }
             [JsonProperty("objectimagemenu")]
             public ObjectImageMenu? ObjectImageMenu { get; set; }
         }
@@ -152,9 +156,9 @@ namespace LiveWall.Scripts
                 JObject obj = JObject.Load(reader);
                 var SceneObject = new SceneObjects();
 
-                if (obj.ContainsKey("particle")) // is a particle obj
+                if (obj.ContainsKey("particle")) // is a an image obj
                 {
-                    SceneObject.ObjectParticle = obj.ToObject<ObjectParticle>(serializer);
+                    SceneObject.ObjectImage = obj.ToObject<ObjectImage>(serializer);
                 }
                 if (obj.ContainsKey("effects")) // is an effect obj
                 {
@@ -170,13 +174,13 @@ namespace LiveWall.Scripts
 
             public override void WriteJson(JsonWriter writer, SceneObjects value, JsonSerializer serializer)
             {
-                if (value.ObjectParticle != null)
+                if (value.ObjectImage != null)
                 {
-                    serializer.Serialize(writer, value.ObjectParticle);
+                    serializer.Serialize(writer, value.ObjectImage);
                 }
                 else if (value.ObjectEffect != null)
                 {
-                    serializer.Serialize(writer, value.ObjectParticle);
+                    serializer.Serialize(writer, value.ObjectEffect);
                 }
                 else if (value.ObjectImageMenu != null)
                 {
@@ -356,12 +360,12 @@ namespace LiveWall.Scripts
         #endregion Object Effect
 
 
-        #region Object Particle
+        #region Object Image
 
-        public class ObjectParticle
+        public class ObjectImage
         {
-            [JsonProperty("angles")] //this could be named origin, angles, alpha, zoom,  etc so i have to turn it into generic type, also present in other objects as well...
-            public string Angles { get; set; }
+            [JsonProperty("angles")]
+            public AnimatableValue<string>? Angles { get; set; }
             public int Id { get; set; }
             public InstanceOverride InstanceOverride { get; set; }
             public bool LockTransforms { get; set; }
@@ -379,49 +383,8 @@ namespace LiveWall.Scripts
             public int Id { get; set; }
             public double Rate { get; set; }
         }
-        #region Particle
 
-
-
-
-        //converter for particle objects
-        public class OriginConverter : Newtonsoft.Json.JsonConverter<Particle>
-        {
-            public override Particle ReadJson(JsonReader reader, Type Objectype, Particle ExistingValue, bool HasExistingValue, JsonSerializer serializer)
-            {
-                if (reader.TokenType == JsonToken.String)
-                {
-                    //if the 1st field is filled in
-                    return new Particle { Value = (string)reader.Value };
-                }
-
-                if (reader.TokenType == JsonToken.StartObject)
-                {
-                    var obj = JObject.Load(reader);
-                    var data = obj.ToObject<ParticleAnimation>(serializer);
-                    return new Particle { Animation = data, Value = data.Value };
-                }
-
-                return null;
-            }
-
-            public override void WriteJson(JsonWriter writer, Particle value, JsonSerializer serializer)
-            {
-                if (value.Animation == null)
-                {
-                    writer.WriteValue(value.Value);
-                }
-                else
-                {
-                    serializer.Serialize(writer, new { animation = value.Animation, value = value.Value });
-                }
-            }
-
-
-        }
-        #endregion Particle Origin
-
-        #endregion Object Particle
+        #endregion Object Image
 
 
         #region Object Text Image Menu
@@ -678,6 +641,53 @@ namespace LiveWall.Scripts
 
             [JsonIgnore]
             public bool HasAnimation => Animation != null;
+        }
+
+        //converter
+        public class AnimatableValueConverter<T> : Newtonsoft.Json.JsonConverter<AnimatableValue<T>>
+        {
+            public override AnimatableValue<T> ReadJson(JsonReader reader, Type objectType, AnimatableValue<T>? existingValue, bool hasExistingValue, JsonSerializer serializer)
+            {
+                var token = JToken.Load(reader);
+
+                if (token.Type == JTokenType.Object)
+                {
+                    var obj = (JObject)token;
+                    var result = new AnimatableValue<T>();
+
+                    if (obj["animation"] != null)
+                        result.Animation = obj.ToObject<ObjectAnimation>(serializer);
+                    if (obj["script"] != null)
+                        result.Script = obj["script"]?.ToString();
+                    if (obj["value"] != null)
+                        result.Value = obj["value"].ToObject<T>(serializer);
+
+                    return result;
+                }
+                else
+                {
+                    //plain data types
+                    return new AnimatableValue<T> { Value = token.ToObject<T>(serializer) };
+                }
+            }
+
+            public override void WriteJson(JsonWriter writer, AnimatableValue<T> value, JsonSerializer serializer)
+            {
+                if (value == null)
+                {
+                    writer.WriteNull();
+                    return;
+                }
+
+                if (value.Animation != null)
+                {
+                    serializer.Serialize(writer, value.Animation);
+                }
+                else
+                {
+                    serializer.Serialize(writer, value.Value);
+                }
+            }
         }
 
 
