@@ -361,7 +361,7 @@ namespace LiveWall.Scripts
         public class ObjectParticle
         {
             [JsonProperty("angles")] //this could be named origin, angles, alpha, zoom,  etc so i have to turn it into generic type, also present in other objects as well...
-            public Particle ParticleObject { get; set; }
+            public string Angles { get; set; }
             public int Id { get; set; }
             public InstanceOverride InstanceOverride { get; set; }
             public bool LockTransforms { get; set; }
@@ -380,98 +380,8 @@ namespace LiveWall.Scripts
             public double Rate { get; set; }
         }
         #region Particle
-        public class Particle
-        {
-            public string Value { get; set; }
-            public ParticleAnimation Animation { get; set; }
-
-            public bool HasAnimation => Animation != null;
-        }
 
 
-        public class ParticleAnimation
-        {
-            [JsonPropertyName("animation")]
-            public ParticleAnimationInfo Frames { get; set; }
-
-            [JsonPropertyName("value")]
-            public string Value { get; set; }
-        }
-        public class ParticleAnimationInfo
-        {
-            public ParticleAnimationOptions Options { get; set; }
-            public bool Relative {  get; set; }
-
-            [JsonExtensionData]
-            public Dictionary<string, JToken> RawChannels { get; set; }
-
-            [JsonIgnore]
-            public Dictionary<string, List<ParticleAnimationFrame>> Channels
-            {
-                get
-                {
-                    if (_channels != null) return _channels;
-
-                    _channels = new();
-                    if (RawChannels == null) return _channels;
-
-                    foreach (var (key, token) in RawChannels)
-                    {
-                        if (key.StartsWith("c"))
-                        {
-                            try
-                            {
-                                var frames = token.ToObject<List<ParticleAnimationFrame>>();
-                                _channels[key] = frames;
-                            }
-                            catch
-                            {
-                                // ignore malformed entries gracefully
-                            }
-                        }
-                    }
-                    return _channels;
-                }
-            }
-            private Dictionary<string, List<ParticleAnimationFrame>> _channels;
-        }
-
-        public class ParticleAnimationOptions
-        {
-            public int Fps { get; set; }
-            public int Length { get; set; }
-            public string Mode { get; set; }
-            public bool WrapLoop { get; set; }
-
-        }
-        public class ParticleAnimationFrame
-        {
-            [JsonProperty("back")]
-            public ParticleAnimationFrameValue Back { get; set; }
-
-            [JsonProperty("frame")]
-            public int Frame { get; set; }
-
-            [JsonProperty("front")]
-            public ParticleAnimationFrameValue Front { get; set; }
-
-            [JsonProperty("lockangle")]
-            public bool LockAngle { get; set; }
-            [JsonProperty("locklength")]
-            public bool LockLength { get; set; }
-            [JsonProperty("value")]
-            public double Value { get; set; }
-        }
-
-        public class ParticleAnimationFrameValue
-        {
-            [JsonProperty("enabled")]
-            public bool Enabled { get; set; }
-            [JsonProperty("x")]
-            public int X { get; set; }
-            [JsonProperty("y")]
-            public int Y { get; set; }
-        }
 
 
         //converter for particle objects
@@ -692,11 +602,11 @@ namespace LiveWall.Scripts
         }
 
         #endregion Object Animation
+
         public class SceneVersion
         {
             public int Version { get; set; }
         }
-
 
         #endregion object property
 
@@ -752,6 +662,22 @@ namespace LiveWall.Scripts
             }
 
 
+        }
+
+
+        //mixed value animation
+        /// <summary>
+        /// Generic type that can handle either a plain value or an animated object.
+        /// Works for origin, angles, zoom, alpha, multiply, etc.
+        /// </summary>
+        public class AnimatableValue<T>
+        {
+            public T? Value { get; set; }
+            public ObjectAnimation? Animation { get; set; }
+            public string? Script { get; set; }
+
+            [JsonIgnore]
+            public bool HasAnimation => Animation != null;
         }
 
 
