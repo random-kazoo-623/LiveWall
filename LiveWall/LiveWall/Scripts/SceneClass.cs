@@ -19,10 +19,12 @@ namespace LiveWall.Scripts
             public CameraData Camera { get; set; }
             [JsonProperty("general")]
             public SceneGeneral General { get; set; }
+
+            //special objects will be resovled at serilization
             [JsonProperty("objects")]
-            [JsonConverter(typeof(SceneObjectConverter))]
             public List<SceneObjects> Objects { get; set; }
 
+            [JsonProperty("version")]
             public Version Version { get; set; }
         }
 
@@ -39,82 +41,11 @@ namespace LiveWall.Scripts
         #region general property
         public class SceneGeneral
         {
-            [JsonProperty("ambientcolor")]
-            public string AmbientColor { get; set; }
-            [JsonProperty("bloom")]
-            public bool Bloom { get; set; }
-            [JsonProperty("bloomhdrfeather")]
-            public double BloomHdrFeather { get; set; }
-            [JsonProperty("bloomhdriterations")]
-            public int BloomHdrIterations { get; set; }
-            [JsonProperty("bloomhdrscatter")]
-            public double BloomHdrScatter { get; set; }
-            [JsonProperty("bloomhdrstrength")]
-            public double BloomHdrStrength { get; set; }
-            [JsonProperty("bloomhdrthreshold")]
-            public double BloomHdrThreshold { get; set; }
-            [JsonProperty("bloomstrength")]
-            public double BloomStrength { get; set; }
-            [JsonProperty("bloomthreshold")]
-            public double BloomThreshold { get; set; }
-            [JsonProperty("bloomtint")]
-            public string? BloomTint { get; set; }
-            [JsonProperty("camerafade")]
-            public bool CameraFade { get; set; }
-            [JsonProperty("cameraparallax")]
-            public bool CameraParallax { get; set; }
-            [JsonProperty("cameraparallaxamount")]
-            public double CameraParallaxAmount { get; set; }
-            [JsonProperty("cameraparallaxdelay")]
-            public double CameraParallaxDelay { get; set; }
-            [JsonProperty("cameraparallaxmouseinfluence")]
-            public double CameraParallaxMouseInfluence { get; set; }
-            [JsonProperty("camerapreview")]
-            public bool CameraPreview { get; set; }
-            [JsonProperty("camerashake")]
-            public bool CameraShake { get; set; }
-            [JsonProperty("camerashakeamplitude")]
-            public double CameraShakeAmplitude { get; set; }
-            [JsonProperty("camerashakeroughness")]
-            public double CameraShakeRoughness { get; set; }
-            [JsonProperty("camerashakespeed")]
-            public double CameraShakeSpeed { get; set; }
-            [JsonProperty("clearcolor")]
-            public string ClearColor { get; set; }
-            [JsonProperty("clearenabled")]
-            public bool ClearEnabled { get; set; }
-            [JsonProperty("farz")]
-            public double Farz { get; set; }
-            [JsonProperty("fov")]
-            public double Fov { get; set; }
-            [JsonProperty("gravitydirection")]
-            public string? GravityDirection { get; set; }
-            [JsonProperty("gravitystrength")]
-            public double? GravityStrength { get; set; }
-            [JsonProperty("hdr")]
-            public bool Hdr { get; set; }
             [JsonProperty("lightconfig")]
             public LightConfig? LightConfig { get; set; }
-            [JsonProperty("nearz")]
-            public double Nearz { get; set; }
             [JsonProperty("orthogonalprojection")]
             public OrthogonalProjection OrthogonalProjection { get; set; }
-            [JsonProperty("perspectiveoverridefov")]
-            public double? PerspectiveOverrideFov { get; set; }
-            [JsonProperty("skylightcolor")]
-            public string SkyLightColor { get; set; }
-            [JsonProperty("spritesheetrefreshsync")]
-            public bool? SpritesheetRefreshSync { get; set; }
-            [JsonProperty("winddirection")]
-            public string? WindDirection { get; set; }
-            [JsonProperty("windenabled")]
-            public bool? WindEnabled { get; set; }
-            [JsonProperty("windstrength")]
-            public double? WindStrength { get; set; }
-            [JsonProperty("zoom")]
-            public double Zoom { get; set; }
-
-            //fallback
+            //dump everything into a dict for post processing
             [JsonExtensionData]
             private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
         }
@@ -139,99 +70,47 @@ namespace LiveWall.Scripts
         //there are multiple version of scene.json file, this is version 1, latest could be version 5
         public class SceneObjects
         {
-
-            [JsonProperty("objecteffect")]
-            public ObjectEffect? ObjectEffect { get; set; }
-            [JsonProperty("objectparticle")]
-            public ObjectImage? ObjectImage { get; set; }
-            [JsonProperty("objectimagemenu")]
-            public ObjectImageMenu? ObjectImageMenu { get; set; }
+            //just a list of objects
+            [JsonProperty("objects")]
+            public List<SceneObject> Objects { get; set; }
         }
 
-        //converter of 3 types
-        public class SceneObjectConverter : Newtonsoft.Json.JsonConverter<SceneObjects>
+        /// <summary>
+        /// not to be confused with SceneObjects!
+        /// </summary>
+        public class SceneObject
         {
-            public override SceneObjects ReadJson(JsonReader reader, Type objectType, SceneObjects existingValue, bool hasExistingValue, JsonSerializer serializer)
-            {
-                JObject obj = JObject.Load(reader);
-                var SceneObject = new SceneObjects();
+            //process known structs
+            [JsonProperty ("instanceoverride")]
+            public InstanceOverride? InstanceOverride { get; set; }
 
-                if (obj.ContainsKey("particle")) // is a an image obj
-                {
-                    SceneObject.ObjectImage = obj.ToObject<ObjectImage>(serializer);
-                }
-                if (obj.ContainsKey("effects")) // is an effect obj
-                {
-                    SceneObject.ObjectEffect = obj.ToObject<ObjectEffect>(serializer);
-                }
-                if (obj.ContainsKey("text")) // is a menu text
-                {
-                    SceneObject.ObjectImageMenu = obj.ToObject<ObjectImageMenu>(serializer);
-                }
+            [JsonProperty ("effects")]
+            public List<ObjectEffects>? ObjectEffects { get; set; }
 
-                return SceneObject;
-            }
 
-            public override void WriteJson(JsonWriter writer, SceneObjects value, JsonSerializer serializer)
-            {
-                if (value.ObjectImage != null)
-                {
-                    serializer.Serialize(writer, value.ObjectImage);
-                }
-                else if (value.ObjectEffect != null)
-                {
-                    serializer.Serialize(writer, value.ObjectEffect);
-                }
-                else if (value.ObjectImageMenu != null)
-                {
-                    serializer.Serialize(writer, value.ObjectImageMenu);
-                }
-            }
+
+            //dump everything else into a dict for post processing
+            [JsonExtensionData]
+            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
         }
         
-        #region Object Effect
-        public class ObjectEffect
+        public class InstanceOverride
         {
-            [JsonProperty("alightment")]
-            public string? Alightment { get; set; }
-            [JsonProperty("alpha")]
-            public double? Alpha { get; set; }
-            [JsonProperty("angles")]
-            public string? Angles { get; set; }
-            [JsonProperty("brightness")]
-            public double? Brightness { get; set; }
-            [JsonProperty("color")]
-            public string? Color { get; set; }
-            [JsonProperty("colorblendmode")]
-            public int? ColorBlendMode { get; set; }
-            [JsonProperty("copybackground")]
-            public bool? CopyBackground { get; set; }
-            [JsonProperty("castshadow")]
-            public bool? CastShadow { get; set; }
-            [JsonProperty("id")]
-            public int? Id { get; set; }
-            [JsonProperty("image")]
-            public string? Image { get; set; }
-            [JsonProperty("name")]
-            public string? Name { get; set; }
-            [JsonProperty("origin")]
-            public string? Origin { get; set; }
-            [JsonProperty("scale")]
-            public string? Scale { get; set; }
-            [JsonProperty("size")]
-            public string? Size { get; set; }
-            [JsonProperty("parent")]
-            public int? Parent {  get; set; }
+            [JsonProperty ("alpha")]
+            public double Alpha { get; set; }
+            [JsonProperty ("id")]
+            public int Id { get; set; }
+            [JsonProperty ("rate")]
+            public double Rate { get; set; }
 
-            [JsonProperty("effects")]
-            public List<EffectProperty> Effects { get; set; }
-
-            //fallback
+            //dump everything else into a dict for post processing
             [JsonExtensionData]
             private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
         }
 
-        public class EffectProperty
+
+        //effect property
+        public class ObjectEffects
         {
             [JsonProperty("file")]
             public string File { get; set; }
@@ -245,64 +124,67 @@ namespace LiveWall.Scripts
 
             [JsonProperty("visible")]
             public bool? Visible { get; set; }
+
+            //dump everything else into a dict for post processing
+            [JsonExtensionData]
+            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
         }
 
         public class ShaderPasses
         {
             [JsonProperty("combos")]
             public ShaderCombos? Combos { get; set; }
-            [JsonProperty("constantshadervalues")]
+            [JsonProperty("shaderconstantvalues")]
             public ShaderConstantsValues ConstantShaderValues { get; set; }
 
             [JsonProperty("id")]
             public int Id { get; set; }
-
             [JsonProperty("textures")]
             public List<string>? Textures { get; set; }
+
+            //dump everything else into a dict for post processing
+            [JsonExtensionData]
+            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
         }
 
         public class ShaderConstantsValues
         {
-            // read whatever in here and compiles  it
+
             [JsonExtensionData]
-            public IDictionary<string, JToken> RawValues { get; set; } = new Dictionary<string, JToken>();
-
-            [JsonProperty("Bar Color")]
-            public ShaderBarColor? BarColor { get; set; }
-
-            [JsonProperty("Bar Count")]
-            public ShaderBarGeneric? BarCount { get; set; }
-
-            [JsonProperty("Border Width")]
-            public ShaderBarGeneric? BorderWidth { get; set; }
+            public Dictionary<string, JToken> RawChannels { get; set; } // there are similar variables like point0, point1, ...
+            //dump everything else into a dict for post processing
+            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
 
 
             [JsonIgnore]
-            public Dictionary<string, object> AsDictionary
+            public Dictionary<string, string> Channels
             {
                 get
                 {
-                    var dict = new Dictionary<string, object>();
-                    foreach(var kvp in RawValues)
+                    if (_channels != null) return _channels;
+
+                    _channels = new();
+                    if (RawChannels == null) return _channels;
+
+                    foreach (var (key, token) in RawChannels)
                     {
-                        try
+                        if (key.StartsWith("point"))
                         {
-                            dict[kvp.Key] = kvp.Value.Type switch
+                            try
                             {
-                                JTokenType.Integer => kvp.Value.ToObject<int>(),
-                                JTokenType.String => kvp.Value.ToObject<string>(),
-                                JTokenType.Float => kvp.Value.ToObject<float>(),
-                                _ => kvp.Value
-                            };
-                        }
-                        catch
-                        {
-                            dict[kvp.Key] = kvp.Value.ToString();
+                                var points = token.ToObject<string>();
+                                _channels[key] = points;
+                            }
+                            catch
+                            {
+                                // ignore malformed entries gracefully
+                            }
                         }
                     }
-                    return dict;
+                    return _channels;
                 }
             }
+            private Dictionary<string, string> _channels;
         }
         #region Const Shader Nested Values
         /// <summary>
@@ -310,9 +192,7 @@ namespace LiveWall.Scripts
         /// </summary>
         public class ShaderBarColor
         {
-            [JsonProperty("user")]
-            public string User {  get; set; }
-            [JsonProperty("value")]
+            public string User { get; set; }
             public string Value { get; set; }
         }
 
@@ -321,9 +201,7 @@ namespace LiveWall.Scripts
         /// </summary>
         public class ShaderBarGeneric
         {
-            [JsonProperty("user")]
             public string User { set; get; }
-            [JsonProperty("value")]
             public double Value { get; set; }
         }
 
@@ -332,27 +210,9 @@ namespace LiveWall.Scripts
         public class ShaderCombos
         {
             //to be used in Passes
-            [JsonProperty("QUALITY")]
-            public int? Quality { get; set; }
-            [JsonProperty("ANAMORPHIC")]
-            public int? Anamorphic { get; set; }
-            [JsonProperty("VERTICAL")]
-            public int? Vertical { get; set; }
-            [JsonProperty("HORIZONTAL")]
-            public int? Horizontal { get; set; }
-            [JsonProperty("BLENDMODE")]
-            public int? BlendMode { get; set; }
-            [JsonProperty("PRECISE")]
-            public int? Precise { get; set; }
-            [JsonProperty("HOLLOW")]
-            public int? Hollow { get; set; }
-            [JsonProperty("SHAPE")]
-            public int? Shape { get; set; }
-            [JsonProperty("VMAPPING")]
-            public int? Vmapping {  get; set; }
 
             [JsonExtensionData]
-            //store unknown keys
+            //dump everything into a dict for post processing
             private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
 
         }
@@ -360,76 +220,21 @@ namespace LiveWall.Scripts
         #endregion Object Effect
 
 
-        #region Object Image
-
-        public class ObjectImage
+        #region Object Text
+        public class ObjectText // script
         {
-            [JsonProperty("angles")]
-            public AnimatableValue<string>? Angles { get; set; }
-            public int Id { get; set; }
-            public InstanceOverride InstanceOverride { get; set; }
-            public bool LockTransforms { get; set; }
-            public string Name { get; set; }
-            public string ParallaxDepth { get; set; }
-            public string Particle { get; set; }
-            public string Scale { get; set; }
-            public VisibleMixed Visible { get; set; }
+            public Script Script { get; set; }
+
+            public ObjectTextVisible Visible { get; set; }
+
+            //dump everything else into a dict for post processing
+            [JsonExtensionData]
+            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
         }
 
-
-        public class InstanceOverride
+        public class Script
         {
-            public double Alpha { get; set; }
-            public int Id { get; set; }
-            public double Rate { get; set; }
-        }
-
-        #endregion Object Image
-
-
-        #region Object Text Image Menu
-        public class ObjectImageMenu
-        {
-            public double Alpha { get; set; }
-            public string Anchor { get; set; }
-            public string Angles { get; set; }
-            public double BackgroundBrightness { get; set; }
-            public string BackgroundColor { get; set; }
-            public bool BlockAlign { get; set; }
-            public double Brightness { get; set; }
-            public string Color { get; set; }
-            public int ColorBlendMode { get; set; }
-            public bool CopyBackground { get; set; }
-            public string Font { get; set; }
-            public string HorizontalAlign { get; set; }
-            public int Id { get; set; }
-            public bool LedSource { get; set; }
-            public bool LimitRows { get; set; }
-            public bool LimitUseEllipsis { get; set; }
-            public bool LimitWidth { get; set; }
-            public bool LockTransform { get; set; }
-            public int MaxRows { get; set; }
-            public double MaxWidth { get; set; }
-            public string Name { get; set; }
-            public bool OpaqueBackgrounnd { get; set; }
-            public string Origin { get; set; }
-            public int Padding { get; set; }
-            public string ParallaxDepth { get; set; }
-            public bool Perspective { get; set; }
-            public double PointSize { get; set; }
-            public string Scale { get; set; }
-            public string Size { get; set; }
-            public bool Solid { get; set; }
-
-            public ObjectImageMenuText Text { get; set; }
-            public string VerticalAlign { get; set; }
-
-            public ObjectImageMenuTextVisible Visible { get; set; }
-        }
-
-        public class ObjectImageMenuText
-        {
-            public string Script { get; set; }
+            public string ScriptText { get; set; }
             public ScriptProperties ScriptProperties { get; set; }
             public string Value { get; set; }
         }
@@ -447,7 +252,7 @@ namespace LiveWall.Scripts
             public bool Value { get; set; }
         }
 
-        public class ObjectImageMenuTextVisible
+        public class ObjectTextVisible
         {
             public ObjectImageMenuTextVisibleUser User { get; set; }
             public bool Value { get; set; }
