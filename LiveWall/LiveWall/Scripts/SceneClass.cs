@@ -87,8 +87,6 @@ namespace LiveWall.Scripts
             [JsonProperty ("effects")]
             public List<ObjectEffects>? ObjectEffects { get; set; }
 
-
-
             //dump everything else into a dict for post processing
             [JsonExtensionData]
             private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
@@ -96,12 +94,8 @@ namespace LiveWall.Scripts
         
         public class InstanceOverride
         {
-            [JsonProperty ("alpha")]
-            public double Alpha { get; set; }
             [JsonProperty ("id")]
             public int Id { get; set; }
-            [JsonProperty ("rate")]
-            public double Rate { get; set; }
 
             //dump everything else into a dict for post processing
             [JsonExtensionData]
@@ -124,6 +118,10 @@ namespace LiveWall.Scripts
 
             [JsonProperty("visible")]
             public bool? Visible { get; set; }
+
+            //animation based stuff
+            [JsonProperty("animation")]
+            public ObjectAnimation? Animation { get; set; }
 
             //dump everything else into a dict for post processing
             [JsonExtensionData]
@@ -153,6 +151,13 @@ namespace LiveWall.Scripts
             [JsonExtensionData]
             public Dictionary<string, JToken> RawChannels { get; set; } // there are similar variables like point0, point1, ...
             //dump everything else into a dict for post processing
+
+            //other nested fields inside shaderconstantsvalues
+
+            [JsonProperty("shader bar color")]
+            private ShaderBarColor? ShaderBarColor { get; set; }
+            [JsonProperty("shader bar generic")]
+            private ShaderBarGeneric? ShaderBarGeneric { get; set; }
             private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
 
 
@@ -219,12 +224,13 @@ namespace LiveWall.Scripts
 
         #endregion Object Effect
 
-
         #region Object Text
         public class ObjectText // script
         {
+            [JsonProperty("script")]
             public Script Script { get; set; }
 
+            [JsonProperty("visible")]
             public ObjectTextVisible Visible { get; set; }
 
             //dump everything else into a dict for post processing
@@ -234,36 +240,50 @@ namespace LiveWall.Scripts
 
         public class Script
         {
+            [JsonProperty("text")]
             public string ScriptText { get; set; }
+            [JsonProperty("scriptproperties")]
             public ScriptProperties ScriptProperties { get; set; }
+            [JsonProperty("value")]
             public string Value { get; set; }
         }
 
         public class ScriptProperties
         {
-            public string Delimiter { get; set; }
-            public bool ShowSeconds { get; set; }
-            public Use24HrFormat Use24HrFormat { get; set; }
+            [JsonProperty("use24hrformat")]
+            public Use24HrFormat? Use24HrFormat { get; set; }
+
+            //dump everything else into a dict for post processing
+            [JsonExtensionData]
+            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
+
         }
+
 
         public class Use24HrFormat
         {
+            [JsonProperty("user")]
             public string User { get; set; }
+            [JsonProperty("value")]
             public bool Value { get; set; }
         }
 
         public class ObjectTextVisible
         {
-            public ObjectImageMenuTextVisibleUser User { get; set; }
+            [JsonProperty("user")]
+            public ObjectTextVisibleUser User { get; set; }
+            [JsonProperty("value")]
             public bool Value { get; set; }
         }
 
-        public class ObjectImageMenuTextVisibleUser
+        public class ObjectTextVisibleUser
         {
+            [JsonProperty("condition")]
             public string Condition { get; set; }
+            [JsonProperty("name")]
             public string Name { get; set; }
         }
-        #endregion Object Text Image Menu
+        #endregion Object Text
 
         #region Object Animation
 
@@ -373,129 +393,69 @@ namespace LiveWall.Scripts
 
         public class SceneVersion
         {
+            [JsonProperty("version")]
             public int Version { get; set; }
-        }
-
-        #endregion object property
-
-        #region Mixed Values
-
-        public class VisibleMixed
-        {
-            [JsonProperty("isvisible")]
-            public bool IsVisible { get; set; }
-            [JsonProperty("isuservisible")]
-            public VisibleUser UserVisible { get; set; }
-
-            public bool IsUserVisible => UserVisible != null;
         }
 
         public class VisibleUser
         {
+            [JsonProperty("user")]
             public string User { get; set; }
+            [JsonProperty("value")]
             public bool Value { get; set; }
         }
 
-        //converter
-        public class VisibleConverter : Newtonsoft.Json.JsonConverter<VisibleMixed>
-        {
-            public override VisibleMixed ReadJson(JsonReader reader, Type Objectype, VisibleMixed ExistingValue, bool HasExistingValue, JsonSerializer serializer)
-            {
-                if (reader.TokenType == JsonToken.String)
-                {
-                    //if the 1st field is filled in
-                    return new VisibleMixed { IsVisible = (bool)reader.Value };
-                }
+        #region Load Scene
 
-                if (reader.TokenType == JsonToken.StartObject)
-                {
-                    var obj = JObject.Load(reader);
-                    var data = obj.ToObject<VisibleUser>(serializer);   
-                    return new VisibleMixed { UserVisible = data, IsVisible = data.Value};
-                }
-
-                return null;
-            }
-
-            public override void WriteJson(JsonWriter writer, VisibleMixed value, JsonSerializer serializer)
-            {
-                if (value.UserVisible == null)
-                {
-                    writer.WriteValue(value.IsVisible);
-                }
-                else
-                {
-                    serializer.Serialize(writer, new { uservisible = value.UserVisible, isvisible = value.IsVisible });
-                }
-            }
-
-
-        }
-
-
-        //mixed value animation
         /// <summary>
-        /// Generic type that can handle either a plain value or an animated object.
-        /// Works for origin, angles, zoom, alpha, multiply, etc.
+        /// Scene loader, what did you expect? Start painting?
         /// </summary>
-        public class AnimatableValue<T>
+        public class SceneLoader
         {
-            public T? Value { get; set; }
-            public ObjectAnimation? Animation { get; set; }
-            public string? Script { get; set; }
+            // base path gifscene.json / scene.json
+            private readonly string BasePath;
 
-            [JsonIgnore]
-            public bool HasAnimation => Animation != null;
-        }
-
-        //converter
-        public class AnimatableValueConverter<T> : Newtonsoft.Json.JsonConverter<AnimatableValue<T>>
-        {
-            public override AnimatableValue<T> ReadJson(JsonReader reader, Type objectType, AnimatableValue<T>? existingValue, bool hasExistingValue, JsonSerializer serializer)
+            public SceneLoader(string SceneDirectory)
             {
-                var token = JToken.Load(reader);
-
-                if (token.Type == JTokenType.Object)
-                {
-                    var obj = (JObject)token;
-                    var result = new AnimatableValue<T>();
-
-                    if (obj["animation"] != null)
-                        result.Animation = obj.ToObject<ObjectAnimation>(serializer);
-                    if (obj["script"] != null)
-                        result.Script = obj["script"]?.ToString();
-                    if (obj["value"] != null)
-                        result.Value = obj["value"].ToObject<T>(serializer);
-
-                    return result;
-                }
-                else
-                {
-                    //plain data types
-                    return new AnimatableValue<T> { Value = token.ToObject<T>(serializer) };
-                }
+                BasePath = SceneDirectory;
             }
 
-            public override void WriteJson(JsonWriter writer, AnimatableValue<T> value, JsonSerializer serializer)
+            /// <summary>
+            /// Load main scene from basepath
+            /// Read all referenced json paths and parse them accordingly
+            /// </summary>
+            /// <param name="path"></param>
+            /// <returns></returns>
+            public SceneClass.GifScene LoadMainScene(string path)
             {
-                if (value == null)
-                {
-                    writer.WriteNull();
-                    return;
-                }
+                string json = File.ReadAllText(path);
+                var scene = JsonConvert.DeserializeObject<SceneClass.GifScene>(json);
 
-                if (value.Animation != null)
+                foreach (var obj in scene.Objects)
                 {
-                    serializer.Serialize(writer, value.Animation);
+                    //effect objects
+                    ResolveEffects(obj);
                 }
-                else
+                return scene;
+            }
+
+            public void ResolveEffects(SceneClass.SceneObjects obj)
+            {
+                foreach (var effect in obj.Objects.SelectMany(o => o.ObjectEffects ?? new()))
                 {
-                    serializer.Serialize(writer, value.Value);
+                    string effectPath = Path.Combine(BasePath, effect.File);
+
+                    if (File.Exists(effectPath))
+                    {
+                        var EffectJson = JsonConvert.DeserializeObject<SceneClass.ObjectEffects>(File.ReadAllText(effectPath));
+                        effect.Passes = EffectJson.Passes;
+                    }
                 }
             }
         }
 
-
-        #endregion Mixed Values
+        #endregion Load Scene
     }
+
+
 }

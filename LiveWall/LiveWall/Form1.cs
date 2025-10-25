@@ -292,6 +292,7 @@ namespace LiveWall
             {
                 //tries to read from setting
                 _videofolder = Properties.Settings.Default.video_folder;
+                _videolist.Clear();
                 _videolist = videos_utilities.generate_playlist(_videofolder);
             }
 
@@ -327,6 +328,7 @@ namespace LiveWall
             else if (_rendermode == "multiple")
             {
                 //just generate another randomised playlist
+                _videolist.Clear();
                 _videolist = videos_utilities.generate_playlist();
                 media = new Media(_libvlc, _videolist[_videolistorder], FromType.FromPath);
                 //calculate time
@@ -430,7 +432,6 @@ namespace LiveWall
             {
                 //if gifscene.json not found
                 scene_json = result + """\scene.json""";
-                SceneClass
                 if (File.Exists(scene_json))
                 {
                     //if nothing found after extracting
@@ -521,6 +522,7 @@ namespace LiveWall
             else
             {
                 //re generate playlist
+                _videolist.Clear();
                 _videolist = videos_utilities.generate_playlist();
                 _videolistorder = 0;
                 Media media = new Media(_libvlc, _videolist[_videolistorder], FromType.FromPath);
@@ -546,6 +548,7 @@ namespace LiveWall
             }
             else if (_rendermode == "multiple")
             {
+                _videolist.Clear();
                 _videolist = videos_utilities.generate_playlist();
                 reload_wallpaper(null, null);
 

@@ -173,6 +173,8 @@ namespace LiveWall.Scripts
                 Debug.WriteLine("added " + files[random_order[i]].ToString());
             }
 
+            Debug.WriteLine("Video counts: {0}", playlist.Count());
+
             return playlist;
         }
 
