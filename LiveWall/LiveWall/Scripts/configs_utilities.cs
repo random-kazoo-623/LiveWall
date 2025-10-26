@@ -8,7 +8,7 @@ namespace LiveWall.Scripts
 {
     internal class configs_utilities
     {
-        public static void Save(string rendermode = "", string videofolder = "", string videolink = "", int videoloopmaxduration = -1, string taskbarstyle = "")
+        public static void Save(string rendermode = "", string videofolder = "", string videolink = "", int videoloopmaxduration = -1, string taskbarstyle = "", string pythonpath = "")
         {
             //if optional settings are not eneterd
             if (string.IsNullOrEmpty(rendermode))
@@ -31,17 +31,22 @@ namespace LiveWall.Scripts
             {
                 taskbarstyle = Properties.Settings.Default.taskbar_style;
             }
+            if (string.IsNullOrEmpty(pythonpath))
+            {
+                pythonpath = Properties.Settings.Default.python_path;
+            }
             Properties.Settings.Default.render_mode = rendermode;
             Properties.Settings.Default.video_folder = videofolder;
             Properties.Settings.Default.video_link = videolink;
             Properties.Settings.Default.render_mode = rendermode;
             Properties.Settings.Default.taskbar_style = taskbarstyle;
             Properties.Settings.Default.video_loop_max_duration = videoloopmaxduration;
+            Properties.Settings.Default.python_path = pythonpath;
             Properties.Settings.Default.Save();
             return;
         }
 
-        public static dynamic Sync(string rendermode = "", string videofolder = "", string videolink = "", int videoloopmaxduration = -1, string taskbarstyle = "")
+        public static dynamic Sync(string rendermode = "", string videofolder = "", string videolink = "", int videoloopmaxduration = -1, string taskbarstyle = "", string pythonpath = "")
         {
             //get a setting from settings and return it, only 1 value is returned.
             //if optional settings are not eneterd
@@ -64,6 +69,10 @@ namespace LiveWall.Scripts
             if (!string.IsNullOrEmpty(taskbarstyle))
             {
                 return Properties.Settings.Default.taskbar_style;
+            }
+            if (!string.IsNullOrEmpty(pythonpath))
+            {
+                return Properties.Settings.Default.python_path;
             }
 
             //if nothing is entered, return the whole thing instead

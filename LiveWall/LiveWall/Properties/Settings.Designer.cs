@@ -94,5 +94,17 @@ namespace LiveWall.Properties {
                 this["taskbar_default_on_fullscreen"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string python_path {
+            get {
+                return ((string)(this["python_path"]));
+            }
+            set {
+                this["python_path"] = value;
+            }
+        }
     }
 }

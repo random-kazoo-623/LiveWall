@@ -79,7 +79,7 @@ namespace LiveWall.Scripts
         }
 
         //DLLs for window size detection
-
+        #region Dll Imports
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
 
@@ -104,6 +104,8 @@ namespace LiveWall.Scripts
 
         [DllImport("user32.dll")]
         private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        #endregion Dll Imports
 
         /// <summary>
         /// Use a raised Mipmap limit version of RePKG to unpack pkg file into usable files
@@ -136,7 +138,7 @@ namespace LiveWall.Scripts
             char[] temp = file_directory_name.ToCharArray();
             Array.Reverse(temp);
             file_directory_name = new string(temp);
-            string extracted_file_dir = """.\scenes\""" + file_directory_name + " ";
+            string extracted_file_dir = """.\scenes\""" + file_directory_name;
 
             Debug.WriteLine($"{extracted_file_dir}");
 
@@ -151,13 +153,96 @@ namespace LiveWall.Scripts
 
             //now that it exists
             string RePKG_path = """.\RePKG\RePKG.exe""";
-            string command_arguments = "extract -o " + extracted_file_dir + file_path;
+            string command_arguments = "extract -o " + extracted_file_dir + " " + file_path;
             //Debug.WriteLine("command: {0}", command_arguments);
             RePKG_path = Path.GetFullPath(RePKG_path);
             var psi = Process.Start(RePKG_path, command_arguments);
             psi.WaitForExit();
             Debug.WriteLine($"extracted pkg file to path: {extracted_file_dir.ToString()}");
             return extracted_file_dir;
+        }
+
+        public static string find_python_exec()
+        {
+            string is_exist = Properties.Settings.Default.python_path;
+            if (File.Exists(is_exist))
+            {
+                return is_exist;
+            }
+
+            //get current folder
+            string current_dir = Directory.GetCurrentDirectory();
+
+
+            Debug.WriteLine("Current directory: {0}", current_dir);
+            string current_user_dir = "";
+            bool current_user_dir_exists = false; // i honestly dont know what to name this
+            for (int i = 0; i < current_dir.Length; i++)
+            {
+                if (current_user_dir.Contains("""Users\"""))
+                {
+                    current_user_dir_exists = true;
+                }
+
+                if (current_user_dir_exists && current_dir[i] == '\\')
+                {
+                    current_user_dir += '\\';
+                    break;
+                }
+                else
+                {
+                    current_user_dir += current_dir[i];
+                }
+
+            }
+
+            Debug.WriteLine("User dir: {0}", current_user_dir);
+
+            string python_dir = current_user_dir + "AppData\\Local\\Programs\\Python";
+
+            if (Directory.Exists(python_dir))
+            {
+                Debug.WriteLine("Python is installed, looking for python exec...");
+            }
+
+
+            List<string> python_folders = new List<string>();
+            foreach (var directory in Directory.GetDirectories(python_dir))
+            {
+                if (directory.Contains("Python") && !directory.Contains("Launcher"))
+                {
+                    python_folders.Add(directory);
+                }
+            }
+
+            //choose the most recent version of python
+            string most_recent_py_version = python_folders[0];
+            int python_version= most_recent_py_version.IndexOf("Python");
+            int latest_version = 0;
+            foreach (var folder in python_folders)
+            {
+                int version_number = Convert.ToInt32(folder.Remove(0, python_version + 13)); // 13 is mad guess work fr fr no cap skib- BANG!
+                if (latest_version < version_number)
+                {
+                    most_recent_py_version = folder;
+                }
+            }
+
+            most_recent_py_version += """\python.exe""";
+            Debug.WriteLine("Python ver {0}", most_recent_py_version);
+            // save to python path
+            if (File.Exists(most_recent_py_version))
+            {
+                configs_utilities.Save(pythonpath :  most_recent_py_version);
+                return most_recent_py_version;
+            }
+            else
+            {
+                configs_utilities.Save(pythonpath : "null");
+                return "null";
+            }
+
+
         }
     }
 }

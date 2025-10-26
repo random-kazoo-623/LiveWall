@@ -115,7 +115,7 @@ namespace LiveWall
                 //init system tray icon for iteractions
                 init_system_tray_icon();
 
-                _videolink = """C:\Users\nongn\Desktop\2967775993_VSTHEMES-ORG\scene.pkg""";
+                _videolink = """C:\Users\minh\Desktop\2156479578_VSTHEMES-ORG\2156479578\scene.pkg""";
                 play_scene();
                 Application.Exit();
                 return;
@@ -419,7 +419,7 @@ namespace LiveWall
 
 
             //extract the pkg file
-            string  result = other_utilities.extract_pkg(_videolink);
+            string result = other_utilities.extract_pkg(_videolink);
             if (string.IsNullOrEmpty(result))
             {
                 return false;
@@ -428,20 +428,21 @@ namespace LiveWall
             //we will have the directory
 
             var scene_json = result + "gifscene.json";
-            if (!File.Exists(scene_json))
+            if (!File.Exists(Path.GetFullPath(scene_json)))
             {
                 //if gifscene.json not found
                 scene_json = result + """\scene.json""";
-                if (File.Exists(scene_json))
+                if (!File.Exists(Path.GetFullPath(scene_json)))
                 {
                     //if nothing found after extracting
-                    Debug.WriteLine("Error: main scene json not found in directory {0}", result);
+                    Debug.WriteLine("Error: main scene json not found in directory {0}", scene_json);
                     return false;
                 }
             }
 
             //read the scene json
-            var root = JsonSerializer.Deserialize<SceneClass.GifScene>(File.ReadAllText(scene_json));
+            var loader = new SceneClass.SceneLoader(scene_json);
+            loader.LoadMainScene();
 
             return false;
         }

@@ -1,9 +1,13 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using OpenTK.Graphics.OpenGL;
+using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
+using System.Security.Cryptography;
 using System.Security.Permissions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Xamarin.Forms;
 using static LiveWall.Scripts.SceneClass;
 using JsonConverter = Newtonsoft.Json.JsonConverterAttribute;
 using JsonExtensionData = Newtonsoft.Json.JsonExtensionDataAttribute;
@@ -13,6 +17,7 @@ namespace LiveWall.Scripts
 {
     internal class SceneClass
     {
+        #region Possible Redundant
         public class GifScene
         {
             [JsonProperty("camera")]
@@ -47,7 +52,7 @@ namespace LiveWall.Scripts
             public OrthogonalProjection OrthogonalProjection { get; set; }
             //dump everything into a dict for post processing
             [JsonExtensionData]
-            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
+            private IDictionary<string, JToken> ExtraFields { get; set; }
         }
 
         public class LightConfig
@@ -72,7 +77,7 @@ namespace LiveWall.Scripts
         {
             //just a list of objects
             [JsonProperty("objects")]
-            public List<SceneObject> Objects { get; set; }
+            public List<SceneObject> Objects { get; set; } = new List<SceneObject>();
         }
 
         /// <summary>
@@ -89,7 +94,7 @@ namespace LiveWall.Scripts
 
             //dump everything else into a dict for post processing
             [JsonExtensionData]
-            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
+            private IDictionary<string, JToken> ExtraFields { get; set; }
         }
         
         public class InstanceOverride
@@ -99,7 +104,7 @@ namespace LiveWall.Scripts
 
             //dump everything else into a dict for post processing
             [JsonExtensionData]
-            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
+            private IDictionary<string, JToken> ExtraFields { get; set; }
         }
 
 
@@ -125,7 +130,7 @@ namespace LiveWall.Scripts
 
             //dump everything else into a dict for post processing
             [JsonExtensionData]
-            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
+            private IDictionary<string, JToken> ExtraFields { get; set; }
         }
 
         public class ShaderPasses
@@ -142,7 +147,7 @@ namespace LiveWall.Scripts
 
             //dump everything else into a dict for post processing
             [JsonExtensionData]
-            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
+            private IDictionary<string, JToken> ExtraFields { get; set; }
         }
 
         public class ShaderConstantsValues
@@ -158,7 +163,7 @@ namespace LiveWall.Scripts
             private ShaderBarColor? ShaderBarColor { get; set; }
             [JsonProperty("shader bar generic")]
             private ShaderBarGeneric? ShaderBarGeneric { get; set; }
-            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
+            private IDictionary<string, JToken> ExtraFields { get; set; }
 
 
             [JsonIgnore]
@@ -218,7 +223,7 @@ namespace LiveWall.Scripts
 
             [JsonExtensionData]
             //dump everything into a dict for post processing
-            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
+            private IDictionary<string, JToken> ExtraFields { get; set; }
 
         }
 
@@ -235,7 +240,7 @@ namespace LiveWall.Scripts
 
             //dump everything else into a dict for post processing
             [JsonExtensionData]
-            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
+            private IDictionary<string, JToken> ExtraFields { get; set; }
         }
 
         public class Script
@@ -255,7 +260,7 @@ namespace LiveWall.Scripts
 
             //dump everything else into a dict for post processing
             [JsonExtensionData]
-            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
+            private IDictionary<string, JToken> ExtraFields { get; set; }
 
         }
 
@@ -306,7 +311,7 @@ namespace LiveWall.Scripts
 
             [JsonExtensionData]
             //get all the raw channels
-            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
+            private IDictionary<string, JToken> ExtraFields { get; set; }
             public Dictionary<string, JToken> RawChannels { get; set; }
 
             [JsonIgnore]
@@ -386,7 +391,7 @@ namespace LiveWall.Scripts
             public bool WrapLoop { get; set; }
             //fallback
             [JsonExtensionData]
-            private List<Dictionary<string, JsonElement>> ExtraFields { get; set; }
+            private IDictionary<string, JToken> ExtraFields { get; set; }
         }
 
         #endregion Object Animation
@@ -405,6 +410,43 @@ namespace LiveWall.Scripts
             public bool Value { get; set; }
         }
 
+        #region Effect Depenendcy
+
+        public class EffectDependentPropterties
+        {
+            [JsonProperty ("passes")]
+            EffectDependentProptertiesPasses Passes { get; set; }
+            //dump everything into a dict for post processing
+            [JsonExtensionData]
+            private IDictionary<string, JToken> ExtraFields { get; set; }
+        }
+        public class EffectDependentProptertiesPasses
+        {
+            List<EffectMaterial> effectMaterials { get; set; }
+        }
+
+        public class EffectMaterial
+        {
+            //dump everything into a dict for post processing
+            [JsonExtensionData]
+            private IDictionary<string, JToken> ExtraFields { get; set; }
+        }
+
+        public class EffectDependentProptertiesDependencies // thats a mouthful
+        {
+            List<string> Dependencies { get; set; }
+            //dump everything into a dict for post processing
+            [JsonExtensionData]
+            private IDictionary<string, JToken> ExtraFields { get; set; }
+        }
+
+
+
+
+        #endregion Effect Depenendcy
+
+        #endregion Possible Redundant
+
         #region Load Scene
 
         /// <summary>
@@ -414,7 +456,6 @@ namespace LiveWall.Scripts
         {
             // base path gifscene.json / scene.json
             private readonly string BasePath;
-
             public SceneLoader(string SceneDirectory)
             {
                 BasePath = SceneDirectory;
@@ -425,35 +466,74 @@ namespace LiveWall.Scripts
             /// Read all referenced json paths and parse them accordingly
             /// </summary>
             /// <param name="path"></param>
-            /// <returns></returns>
-            public SceneClass.GifScene LoadMainScene(string path)
+            /// <returns>Probably a nested list dict i guess? </returns>
+            public SceneClass.GifScene LoadMainScene()
             {
+                string path = BasePath;
+                Debug.WriteLine("Loading scene on path {0}", path);
                 string json = File.ReadAllText(path);
+                
+                JObject MainScene = ResolveJsonPaths(path);
+
+                // deserialize
                 var scene = JsonConvert.DeserializeObject<SceneClass.GifScene>(json);
 
-                foreach (var obj in scene.Objects)
-                {
-                    //effect objects
-                    ResolveEffects(obj);
-                }
                 return scene;
             }
 
-            public void ResolveEffects(SceneClass.SceneObjects obj)
+            /// <summary>
+            /// Use Python, yes python to resovle fields and replace file paths with fetched Json Fields.
+            /// Ignored File paths: preview/project.json paths, file paths in dependency (will overflow if included)
+            /// </summary>
+            /// <param name="path"></param>
+            /// <returns>A master JObject containing the whole scene</returns>
+            public JObject ResolveJsonPaths(string path)
             {
-                foreach (var effect in obj.Objects.SelectMany(o => o.ObjectEffects ?? new()))
-                {
-                    string effectPath = Path.Combine(BasePath, effect.File);
+                //check is python is installed
+                string python_path = "";
+                //get current dir
+                string current_dir = Directory.GetCurrentDirectory();
 
-                    if (File.Exists(effectPath))
-                    {
-                        var EffectJson = JsonConvert.DeserializeObject<SceneClass.ObjectEffects>(File.ReadAllText(effectPath));
-                        effect.Passes = EffectJson.Passes;
-                    }
+                //get python exec
+                string python_exec_path = other_utilities.find_python_exec();
+                if (python_exec_path == "null")
+                {
+                    // fallback to embeded exe instead
+                    Debug.WriteLine("Python is not installed :(");
+                    python_path = current_dir + """\Execs\load_scene_helper.exe""";
                 }
+                else
+                {
+                    Debug.WriteLine($"Python is installed on {python_exec_path}");
+                    python_path = python_exec_path;
+                }
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = python_path,
+                    Arguments = $"{path}",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using var process = Process.Start(psi);
+                string output = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+
+                if (process.ExitCode != 0)
+                {
+                    throw new Exception($"Python error: {error}");
+                }
+
+                Debug.WriteLine($"{output}");
+                
+                var deserialized = JsonConvert.DeserializeObject<dynamic>(output);
+                return deserialized;
             }
         }
-
         #endregion Load Scene
     }
 
