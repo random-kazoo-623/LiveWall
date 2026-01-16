@@ -115,7 +115,7 @@ namespace LiveWall
                 //init system tray icon for iteractions
                 init_system_tray_icon();
 
-                _videolink = """C:\Users\minh\Desktop\2156479578_VSTHEMES-ORG\2156479578\scene.pkg""";
+                _videolink = """C:\Users\minh\Desktop\3018519288_VSTHEMES-ORG\scene.pkg""";
                 play_scene();
                 Application.Exit();
                 return;
@@ -441,8 +441,8 @@ namespace LiveWall
             }
 
             //read the scene json
-            var loader = new SceneClass.SceneLoader(scene_json);
-            loader.LoadMainScene();
+            //var loader = new SceneClass.SceneLoader(scene_json);
+            //loader.LoadMainScene();
 
             return false;
         }
