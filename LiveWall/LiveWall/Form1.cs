@@ -41,7 +41,6 @@ namespace LiveWall
         private string _taskbarstyle = Properties.Settings.Default.taskbar_style;
         //private bool _taskbar_default_on_fullscreen = Properties.Settings.Default.taskbar_default_on_fullscreen; NOT IMPLEMENTED
 
-        private bool is_scene_pkg = false;
 
 
         private List<string> _videolist = new List<string>();
@@ -93,13 +92,13 @@ namespace LiveWall
                 _videofolder = result;
             }
 
+            int screen_height = Screen.PrimaryScreen.Bounds.Height;
+            int screen_width = Screen.PrimaryScreen.Bounds.Width;
             // then lets find the workerw handle layer
             IntPtr workerw = get_workerw();
             if (workerw != IntPtr.Zero)
             {
                 //get current screen resolution
-                int screen_width = Screen.PrimaryScreen.Bounds.Width;
-                int screen_height = Screen.PrimaryScreen.Bounds.Height;
                 Debug.WriteLine("Current resolution: {0} x {1}", screen_width, screen_height);
 
                 //full screen
@@ -115,10 +114,6 @@ namespace LiveWall
                 //init system tray icon for iteractions
                 init_system_tray_icon();
 
-                _videolink = """C:\Users\minh\Desktop\3018519288_VSTHEMES-ORG\scene.pkg""";
-                play_scene();
-                Application.Exit();
-                return;
                 //check render mode to correctly reflect the previous saved application state
                 if (_rendermode == "multiple")
                 {
@@ -158,6 +153,17 @@ namespace LiveWall
                             return;
                         }
                         _player.SetPause(false);
+                    }
+
+                    // check if the screen resolution changes mid way through
+                    int width = Screen.PrimaryScreen.Bounds.Width;
+                    int height = Screen.PrimaryScreen.Bounds.Height;
+                    if (screen_height != height || screen_width != width)
+                    {
+                        screen_height = height;
+                        screen_width = width;
+                        // set the video dimension to the new resolution
+                        SetWindowPos(this.Handle, IntPtr.Zero, 0, 0, screen_width, screen_height, SetWindowsPosFlags.SWP_NOZORDER);
                     }
                 };
                 timer.Start();
