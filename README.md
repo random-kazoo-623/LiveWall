@@ -1,10 +1,11 @@
-# LiveWall
+# LiveWall - Archived
+## This Project will be archived in favor for a rewrite in the future.
 
 A system tray application that sets the user's live wallpapers
 
 # Current Features in Development
 
-- Render Scene based Live Wallpaper (attacking the json files)
+- Render Scene based Live Wallpaper (Halted)
 - Add support to load Gif and Picture files (Halted)
 - Add other Video renderer [mpv,...] (Halted)
 
